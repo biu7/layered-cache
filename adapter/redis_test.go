@@ -20,7 +20,7 @@ func setupRedisAdapter(t *testing.T) (*RedisAdapter, *miniredis.Miniredis) {
 		Addr: mr.Addr(),
 	})
 
-	adapter := NewRedisAdapter(client)
+	adapter := NewRedisAdapterWithClient(client)
 	return adapter, mr
 }
 
@@ -234,7 +234,7 @@ func TestRedisAdapter_Get(t *testing.T) {
 			key:         "non-existing-key",
 			want:        "",
 			wantErr:     true,
-			expectedErr: errors.ErrKeyNotFound,
+			expectedErr: errors.ErrNotFound,
 		},
 	}
 
@@ -489,7 +489,7 @@ func BenchmarkRedisAdapter_Set(b *testing.B) {
 	client := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
 	})
-	adapter := NewRedisAdapter(client)
+	adapter := NewRedisAdapterWithClient(client)
 	ctx := context.Background()
 
 	b.ResetTimer()
@@ -511,7 +511,7 @@ func BenchmarkRedisAdapter_Get(b *testing.B) {
 	client := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
 	})
-	adapter := NewRedisAdapter(client)
+	adapter := NewRedisAdapterWithClient(client)
 	ctx := context.Background()
 
 	// 预设数据
@@ -539,7 +539,7 @@ func BenchmarkRedisAdapter_MGet(b *testing.B) {
 	client := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
 	})
-	adapter := NewRedisAdapter(client)
+	adapter := NewRedisAdapterWithClient(client)
 	ctx := context.Background()
 
 	// 预设数据

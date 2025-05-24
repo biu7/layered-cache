@@ -285,7 +285,7 @@ func TestOtterAdapter_Get(t *testing.T) {
 			key:         "missing",
 			want:        "",
 			wantErr:     true,
-			expectedErr: errors.ErrKeyNotFound,
+			expectedErr: errors.ErrNotFound,
 		},
 	}
 
@@ -499,8 +499,8 @@ func TestOtterAdapter_TTL(t *testing.T) {
 		_, err = adapter.Get(ctx, key)
 		if err == nil {
 			t.Logf("注意：键在预期过期时间后仍然可访问，这可能是 Otter 的惰性过期机制")
-		} else if !errors.Is(err, errors.ErrKeyNotFound) {
-			t.Errorf("过期后应该返回 ErrKeyNotFound 或仍可访问，但得到了其他错误: %v", err)
+		} else if !errors.Is(err, errors.ErrNotFound) {
+			t.Errorf("过期后应该返回 ErrNotFound 或仍可访问，但得到了其他错误: %v", err)
 		}
 
 		// 再次尝试访问以触发可能的惰性过期检查
