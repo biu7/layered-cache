@@ -15,7 +15,16 @@ type RedisAdapter struct {
 	client redis.Cmdable
 }
 
-func NewRedisAdapter(client redis.Cmdable) *RedisAdapter {
+func NewRedisAdapter(redisURL string) (*RedisAdapter, error) {
+	opt, err := redis.ParseURL(redisURL)
+	if err != nil {
+		return nil, fmt.Errorf("redis parse url: %w", err)
+	}
+	client := redis.NewClient(opt)
+	return NewRedisAdapterWithClient(client), nil
+}
+
+func NewRedisAdapterWithClient(client redis.Cmdable) *RedisAdapter {
 	return &RedisAdapter{client: client}
 }
 
@@ -44,7 +53,7 @@ func (r *RedisAdapter) Get(ctx context.Context, key string) (string, error) {
 	val, err := r.client.Get(ctx, key).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return "", errors.ErrKeyNotFound
+			return "", errors.ErrNotFound
 		}
 		return "", fmt.Errorf("redis get %s: %w", key, err)
 	}

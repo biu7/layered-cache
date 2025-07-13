@@ -15,30 +15,30 @@ type OtterAdapter struct {
 	client *otter.CacheWithVariableTTL[string, string]
 }
 
-func NewOtterAdapter(capacity int) (*OtterAdapter, error) {
-	if capacity <= 0 {
-		return nil, fmt.Errorf("otter create: invalid capacity: %d", capacity)
+func NewOtterAdapter(maxMemory int) (*OtterAdapter, error) {
+	if maxMemory <= 0 {
+		return nil, fmt.Errorf("otter create: invalid maxMemory: %d", maxMemory)
 	}
-	cache, err := otter.MustBuilder[string, string](capacity).
+	cache, err := otter.MustBuilder[string, string](maxMemory).
 		WithVariableTTL().
 		Cost(func(key string, value string) uint32 {
 			return uint32(len(key) + len(value))
 		}).
 		Build()
 	if err != nil {
-		return nil, fmt.Errorf("otter create: capacity %d: %w", capacity, err)
+		return nil, fmt.Errorf("otter create: capacity %d: %w", maxMemory, err)
 	}
 	return &OtterAdapter{
 		client: &cache,
 	}, nil
 }
 
-func NewOtterAdapterWithCache(cache *otter.CacheWithVariableTTL[string, string]) (*OtterAdapter, error) {
-	if cache == nil {
+func NewOtterAdapterWithClient(client *otter.CacheWithVariableTTL[string, string]) (*OtterAdapter, error) {
+	if client == nil {
 		return nil, fmt.Errorf("otter create: cache is nil")
 	}
 	return &OtterAdapter{
-		client: cache,
+		client: client,
 	}, nil
 }
 
@@ -66,7 +66,7 @@ func (o *OtterAdapter) MSet(ctx context.Context, values map[string]string, expir
 func (o *OtterAdapter) Get(ctx context.Context, key string) (string, error) {
 	val, success := o.client.Get(key)
 	if !success {
-		return "", errors.ErrKeyNotFound
+		return "", errors.ErrNotFound
 	}
 	return val, nil
 }
