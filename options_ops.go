@@ -29,8 +29,8 @@ type getOptions struct {
 	// memoryTTL 加载后写入内存缓存的过期时间
 	memoryTTL *time.Duration
 
-	// redisTTL 加载后写入Redis缓存的过期时间
-	redisTTL *time.Duration
+	// remoteTTL 加载后写入Redis缓存的过期时间
+	remoteTTL *time.Duration
 
 	// cacheNotFound 是否缓存缺失值（防止缓存穿透）
 	cacheNotFound *bool
@@ -70,25 +70,25 @@ func WithBatchLoader(batchLoader BatchLoaderFunc) GetOption {
 // withTTL TTL选项的通用实现
 type withTTL struct {
 	memoryTTL time.Duration
-	redisTTL  time.Duration
+	remoteTTL time.Duration
 }
 
 func (w withTTL) applyGet(cfg *getOptions) {
 	cfg.memoryTTL = &w.memoryTTL
-	cfg.redisTTL = &w.redisTTL
+	cfg.remoteTTL = &w.remoteTTL
 }
 
 func (w withTTL) applySet(cfg *setOptions) {
 	cfg.memoryTTL = &w.memoryTTL
-	cfg.redisTTL = &w.redisTTL
+	cfg.remoteTTL = &w.remoteTTL
 }
 
 // WithTTL 设置缓存过期时间（通用选项，可用于Get和Set操作）
-func WithTTL(memoryTTL, redisTTL time.Duration) interface {
+func WithTTL(memoryTTL, remoteTTL time.Duration) interface {
 	GetOption
 	SetOption
 } {
-	return withTTL{memoryTTL: memoryTTL, redisTTL: redisTTL}
+	return withTTL{memoryTTL: memoryTTL, remoteTTL: remoteTTL}
 }
 
 type withMemoryTTL struct {
@@ -112,23 +112,23 @@ func WithMemoryTTL(memoryTTL time.Duration) interface {
 }
 
 type withRedisTTL struct {
-	redisTTL time.Duration
+	remoteTTL time.Duration
 }
 
 func (w withRedisTTL) applyGet(cfg *getOptions) {
-	cfg.redisTTL = &w.redisTTL
+	cfg.remoteTTL = &w.remoteTTL
 }
 
 func (w withRedisTTL) applySet(cfg *setOptions) {
-	cfg.redisTTL = &w.redisTTL
+	cfg.remoteTTL = &w.remoteTTL
 }
 
-// WithRedisTTL 设置缓存过期时间（通用选项，可用于Get和Set操作）
-func WithRedisTTL(redisTTL time.Duration) interface {
+// WithRemoteTTL 设置缓存过期时间（通用选项，可用于Get和Set操作）
+func WithRemoteTTL(remoteTTL time.Duration) interface {
 	GetOption
 	SetOption
 } {
-	return withRedisTTL{redisTTL: redisTTL}
+	return withRedisTTL{remoteTTL: remoteTTL}
 }
 
 // withCacheNotFound 设置是否缓存缺失值
@@ -167,7 +167,7 @@ func validateGetOptions(cfg *getOptions) error {
 		return errors.ErrInvalidMemoryExpireTime
 	}
 
-	if cfg.redisTTL != nil && *cfg.redisTTL <= 0 {
+	if cfg.remoteTTL != nil && *cfg.remoteTTL <= 0 {
 		return errors.ErrInvalidRedisExpireTime
 	}
 
@@ -187,8 +187,8 @@ type setOptions struct {
 	// memoryTTL 内存缓存过期时间
 	memoryTTL *time.Duration
 
-	// redisTTL Redis缓存过期时间
-	redisTTL *time.Duration
+	// remoteTTL Redis缓存过期时间
+	remoteTTL *time.Duration
 }
 
 // applySetOptions 应用Set选项到配置
@@ -209,7 +209,7 @@ func validateSetOptions(cfg *setOptions) error {
 		return errors.ErrInvalidMemoryExpireTime
 	}
 
-	if cfg.redisTTL != nil && *cfg.redisTTL <= 0 {
+	if cfg.remoteTTL != nil && *cfg.remoteTTL <= 0 {
 		return errors.ErrInvalidRedisExpireTime
 	}
 	return nil

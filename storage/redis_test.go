@@ -1,4 +1,4 @@
-package adapter
+package storage
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func setupRedisAdapter(t *testing.T) (*RedisAdapter, *miniredis.Miniredis) {
+func setupRedis(t *testing.T) (*Redis, *miniredis.Miniredis) {
 	t.Helper()
 
 	mr := miniredis.RunT(t)
@@ -21,25 +21,25 @@ func setupRedisAdapter(t *testing.T) (*RedisAdapter, *miniredis.Miniredis) {
 		Addr: mr.Addr(),
 	})
 
-	adapter := NewRedisAdapterWithClient(client)
-	return adapter, mr
+	rdb := NewRedisWithClient(client)
+	return rdb, mr
 }
 
-func TestNewRedisAdapter(t *testing.T) {
-	adapter, mr := setupRedisAdapter(t)
+func TestNewRedis(t *testing.T) {
+	rdb, mr := setupRedis(t)
 	defer mr.Close()
 
-	if adapter == nil {
-		t.Fatal("expected adapter to be non-nil")
+	if rdb == nil {
+		t.Fatal("expected rdb to be non-nil")
 	}
 
-	if adapter.client == nil {
+	if rdb.client == nil {
 		t.Fatal("expected client to be non-nil")
 	}
 }
 
-func TestRedisAdapter_Set(t *testing.T) {
-	adapter, mr := setupRedisAdapter(t)
+func TestRedis_Set(t *testing.T) {
+	rdb, mr := setupRedis(t)
 	defer mr.Close()
 
 	tests := []struct {
@@ -82,7 +82,7 @@ func TestRedisAdapter_Set(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			err := adapter.Set(ctx, tt.key, tt.value, tt.expire)
+			err := rdb.Set(ctx, tt.key, tt.value, tt.expire)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Set() error = %v, wantErr %v", err, tt.wantErr)
@@ -91,7 +91,7 @@ func TestRedisAdapter_Set(t *testing.T) {
 
 			if !tt.wantErr {
 				// 验证值是否正确设置
-				got, err := adapter.Get(ctx, tt.key)
+				got, err := rdb.Get(ctx, tt.key)
 				if err != nil {
 					t.Errorf("验证设置失败: %v", err)
 					return
@@ -112,8 +112,8 @@ func TestRedisAdapter_Set(t *testing.T) {
 	}
 }
 
-func TestRedisAdapter_MSet(t *testing.T) {
-	adapter, mr := setupRedisAdapter(t)
+func TestRedis_MSet(t *testing.T) {
+	rdb, mr := setupRedis(t)
 	defer mr.Close()
 
 	tests := []struct {
@@ -160,7 +160,7 @@ func TestRedisAdapter_MSet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			err := adapter.MSet(ctx, tt.values, tt.expire)
+			err := rdb.MSet(ctx, tt.values, tt.expire)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MSet() error = %v, wantErr %v", err, tt.wantErr)
@@ -170,7 +170,7 @@ func TestRedisAdapter_MSet(t *testing.T) {
 			if !tt.wantErr && len(tt.values) > 0 {
 				// 验证所有键值对是否正确设置
 				for key, expectedValue := range tt.values {
-					got, err := adapter.Get(ctx, key)
+					got, err := rdb.Get(ctx, key)
 					if err != nil {
 						t.Errorf("验证 MSet 设置失败，键 %s: %v", key, err)
 						continue
@@ -192,8 +192,8 @@ func TestRedisAdapter_MSet(t *testing.T) {
 	}
 }
 
-func TestRedisAdapter_Get(t *testing.T) {
-	adapter, mr := setupRedisAdapter(t)
+func TestRedis_Get(t *testing.T) {
+	rdb, mr := setupRedis(t)
 	defer mr.Close()
 
 	// 预设一些测试数据
@@ -204,7 +204,7 @@ func TestRedisAdapter_Get(t *testing.T) {
 	}
 
 	for key, value := range testData {
-		if err := adapter.Set(ctx, key, value, time.Hour); err != nil {
+		if err := rdb.Set(ctx, key, value, time.Hour); err != nil {
 			t.Fatalf("预设测试数据失败: %v", err)
 		}
 	}
@@ -241,7 +241,7 @@ func TestRedisAdapter_Get(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := adapter.Get(ctx, tt.key)
+			got, err := rdb.Get(ctx, tt.key)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Get() error = %v, wantErr %v", err, tt.wantErr)
@@ -262,8 +262,8 @@ func TestRedisAdapter_Get(t *testing.T) {
 	}
 }
 
-func TestRedisAdapter_MGet(t *testing.T) {
-	adapter, mr := setupRedisAdapter(t)
+func TestRedis_MGet(t *testing.T) {
+	rdb, mr := setupRedis(t)
 	defer mr.Close()
 
 	// 预设一些测试数据
@@ -275,7 +275,7 @@ func TestRedisAdapter_MGet(t *testing.T) {
 	}
 
 	for key, value := range testData {
-		if err := adapter.Set(ctx, key, value, time.Hour); err != nil {
+		if err := rdb.Set(ctx, key, value, time.Hour); err != nil {
 			t.Fatalf("预设测试数据失败: %v", err)
 		}
 	}
@@ -329,7 +329,7 @@ func TestRedisAdapter_MGet(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := adapter.MGet(ctx, tt.keys)
+			got, err := rdb.MGet(ctx, tt.keys)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MGet() error = %v, wantErr %v", err, tt.wantErr)
@@ -361,8 +361,8 @@ func TestRedisAdapter_MGet(t *testing.T) {
 	}
 }
 
-func TestRedisAdapter_Delete(t *testing.T) {
-	adapter, mr := setupRedisAdapter(t)
+func TestRedis_Delete(t *testing.T) {
+	rdb, mr := setupRedis(t)
 	defer mr.Close()
 
 	// 预设一些测试数据
@@ -370,7 +370,7 @@ func TestRedisAdapter_Delete(t *testing.T) {
 	testKeys := []string{"to-delete-1", "to-delete-2"}
 
 	for _, key := range testKeys {
-		if err := adapter.Set(ctx, key, []byte("test-value"), time.Hour); err != nil {
+		if err := rdb.Set(ctx, key, []byte("test-value"), time.Hour); err != nil {
 			t.Fatalf("预设测试数据失败: %v", err)
 		}
 	}
@@ -399,7 +399,7 @@ func TestRedisAdapter_Delete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := adapter.Delete(ctx, tt.key)
+			err := rdb.Delete(ctx, tt.key)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Delete() error = %v, wantErr %v", err, tt.wantErr)
@@ -408,7 +408,7 @@ func TestRedisAdapter_Delete(t *testing.T) {
 
 			if !tt.wantErr && tt.key != "" {
 				// 验证键是否被删除（如果原本存在）
-				_, err := adapter.Get(ctx, tt.key)
+				_, err := rdb.Get(ctx, tt.key)
 				if err == nil {
 					// 如果键原本存在，现在应该获取不到
 					if contains(testKeys, tt.key) {
@@ -420,8 +420,8 @@ func TestRedisAdapter_Delete(t *testing.T) {
 	}
 }
 
-func TestRedisAdapter_ContextCancellation(t *testing.T) {
-	adapter, mr := setupRedisAdapter(t)
+func TestRedis_ContextCancellation(t *testing.T) {
+	rdb, mr := setupRedis(t)
 	defer mr.Close()
 
 	// 测试上下文取消时的行为
@@ -429,34 +429,34 @@ func TestRedisAdapter_ContextCancellation(t *testing.T) {
 	cancel() // 立即取消上下文
 
 	// 所有操作都应该返回上下文取消错误
-	err := adapter.Set(ctx, "test-key", []byte("test-value"), time.Hour)
+	err := rdb.Set(ctx, "test-key", []byte("test-value"), time.Hour)
 	if err == nil {
 		t.Error("Set() 在取消的上下文中应该返回错误")
 	}
 
-	_, err = adapter.Get(ctx, "test-key")
+	_, err = rdb.Get(ctx, "test-key")
 	if err == nil {
 		t.Error("Get() 在取消的上下文中应该返回错误")
 	}
 
-	err = adapter.Delete(ctx, "test-key")
+	err = rdb.Delete(ctx, "test-key")
 	if err == nil {
 		t.Error("Delete() 在取消的上下文中应该返回错误")
 	}
 
-	_, err = adapter.MGet(ctx, []string{"test-key"})
+	_, err = rdb.MGet(ctx, []string{"test-key"})
 	if err == nil {
 		t.Error("MGet() 在取消的上下文中应该返回错误")
 	}
 
-	err = adapter.MSet(ctx, map[string][]byte{"test-key": []byte("test-value")}, time.Hour)
+	err = rdb.MSet(ctx, map[string][]byte{"test-key": []byte("test-value")}, time.Hour)
 	if err == nil {
 		t.Error("MSet() 在取消的上下文中应该返回错误")
 	}
 }
 
-func TestRedisAdapter_ContextTimeout(t *testing.T) {
-	adapter, mr := setupRedisAdapter(t)
+func TestRedis_ContextTimeout(t *testing.T) {
+	rdb, mr := setupRedis(t)
 	defer mr.Close()
 
 	// 测试超时上下文
@@ -466,7 +466,7 @@ func TestRedisAdapter_ContextTimeout(t *testing.T) {
 	// 等待超时
 	time.Sleep(1 * time.Millisecond)
 
-	err := adapter.Set(ctx, "test-key", []byte("test-value"), time.Hour)
+	err := rdb.Set(ctx, "test-key", []byte("test-value"), time.Hour)
 	if err == nil {
 		t.Error("Set() 在超时的上下文中应该返回错误")
 	}
@@ -483,14 +483,14 @@ func contains(slice []string, item string) bool {
 }
 
 // 基准测试
-func BenchmarkRedisAdapter_Set(b *testing.B) {
+func BenchmarkRedis_Set(b *testing.B) {
 	mr := miniredis.RunT(b)
 	defer mr.Close()
 
 	client := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
 	})
-	adapter := NewRedisAdapterWithClient(client)
+	rdb := NewRedisWithClient(client)
 	ctx := context.Background()
 
 	b.ResetTimer()
@@ -499,27 +499,27 @@ func BenchmarkRedisAdapter_Set(b *testing.B) {
 		for pb.Next() {
 			key := fmt.Sprintf("bench-key-%d", i)
 			value := []byte(fmt.Sprintf("bench-value-%d", i))
-			_ = adapter.Set(ctx, key, value, time.Hour)
+			_ = rdb.Set(ctx, key, value, time.Hour)
 			i++
 		}
 	})
 }
 
-func BenchmarkRedisAdapter_Get(b *testing.B) {
+func BenchmarkRedis_Get(b *testing.B) {
 	mr := miniredis.RunT(b)
 	defer mr.Close()
 
 	client := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
 	})
-	adapter := NewRedisAdapterWithClient(client)
+	rdb := NewRedisWithClient(client)
 	ctx := context.Background()
 
 	// 预设数据
 	for i := 0; i < 1000; i++ {
 		key := fmt.Sprintf("bench-key-%d", i)
 		value := []byte(fmt.Sprintf("bench-value-%d", i))
-		_ = adapter.Set(ctx, key, value, time.Hour)
+		_ = rdb.Set(ctx, key, value, time.Hour)
 	}
 
 	b.ResetTimer()
@@ -527,27 +527,27 @@ func BenchmarkRedisAdapter_Get(b *testing.B) {
 		i := 0
 		for pb.Next() {
 			key := fmt.Sprintf("bench-key-%d", i%1000)
-			_, _ = adapter.Get(ctx, key)
+			_, _ = rdb.Get(ctx, key)
 			i++
 		}
 	})
 }
 
-func BenchmarkRedisAdapter_MGet(b *testing.B) {
+func BenchmarkRedis_MGet(b *testing.B) {
 	mr := miniredis.RunT(b)
 	defer mr.Close()
 
 	client := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
 	})
-	adapter := NewRedisAdapterWithClient(client)
+	rdb := NewRedisWithClient(client)
 	ctx := context.Background()
 
 	// 预设数据
 	for i := 0; i < 1000; i++ {
 		key := fmt.Sprintf("bench-key-%d", i)
 		value := []byte(fmt.Sprintf("bench-value-%d", i))
-		_ = adapter.Set(ctx, key, value, time.Hour)
+		_ = rdb.Set(ctx, key, value, time.Hour)
 	}
 
 	keys := make([]string, 10)
@@ -558,7 +558,7 @@ func BenchmarkRedisAdapter_MGet(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			_, _ = adapter.MGet(ctx, keys)
+			_, _ = rdb.MGet(ctx, keys)
 		}
 	})
 }

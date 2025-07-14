@@ -6,9 +6,9 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/biu7/layered-cache/adapter"
 	"github.com/biu7/layered-cache/errors"
 	"github.com/biu7/layered-cache/serializer"
+	"github.com/biu7/layered-cache/storage"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -29,15 +29,15 @@ type Cache interface {
 // LayeredCache 分层缓存实现
 type LayeredCache struct {
 	// 适配器
-	memory adapter.MemoryAdapter
-	remote adapter.RemoteAdapter
+	memory storage.Memory
+	remote storage.Remote
 
 	// 序列化器
 	serializer serializer.Serializer
 
 	// 默认TTL
 	defaultMemoryTTL time.Duration
-	defaultRedisTTL  time.Duration
+	defaultRemoteTTL time.Duration
 
 	// 默认缺失值缓存设置
 	defaultCacheNotFound    bool
@@ -57,11 +57,11 @@ func NewCache(opts ...Option) (Cache, error) {
 
 	cache := &LayeredCache{
 		memory:     config.memoryAdapter,
-		remote:     config.redisAdapter,
+		remote:     config.remoteAdapter,
 		serializer: config.serializer,
 
 		defaultMemoryTTL: config.defaultMemoryTTL,
-		defaultRedisTTL:  config.defaultRedisTTL,
+		defaultRemoteTTL: config.defaultRemoteTTL,
 
 		defaultCacheNotFound:    config.defaultCacheNotFound,
 		defaultCacheNotFoundTTL: config.defaultCacheNotFoundTTL,
@@ -82,14 +82,14 @@ func (c *LayeredCache) Set(ctx context.Context, key string, value any, opts ...S
 		return err
 	}
 
-	memoryTTL, redisTTL := c.calculateSetTTL(config)
+	memoryTTL, remoteTTL := c.calculateSetTTL(config)
 
 	if c.memory != nil {
 		c.memory.Set(key, data, memoryTTL)
 	}
 
 	if c.remote != nil {
-		if err = c.remote.Set(ctx, key, data, redisTTL); err != nil {
+		if err = c.remote.Set(ctx, key, data, remoteTTL); err != nil {
 			return err
 		}
 	}
@@ -104,7 +104,7 @@ func (c *LayeredCache) MSet(ctx context.Context, keyValues map[string]any, opts 
 		return err
 	}
 
-	memoryTTL, redisTTL := c.calculateSetTTL(config)
+	memoryTTL, remoteTTL := c.calculateSetTTL(config)
 
 	serializedData := make(map[string][]byte)
 	for key, value := range keyValues {
@@ -122,7 +122,7 @@ func (c *LayeredCache) MSet(ctx context.Context, keyValues map[string]any, opts 
 
 	// 设置到Redis缓存
 	if c.remote != nil {
-		if err := c.remote.MSet(ctx, serializedData, redisTTL); err != nil {
+		if err := c.remote.MSet(ctx, serializedData, remoteTTL); err != nil {
 			return err
 		}
 	}
@@ -221,7 +221,7 @@ func (c *LayeredCache) loadAndCache(ctx context.Context, key string, config *get
 	}
 
 	// 计算TTL
-	memoryTTL, redisTTL := c.calculateLoaderTTL(config, isNotFound && cacheNotFound)
+	memoryTTL, remoteTTL := c.calculateLoaderTTL(config, isNotFound && cacheNotFound)
 
 	if c.memory != nil {
 		c.memory.Set(key, data, memoryTTL)
@@ -229,7 +229,7 @@ func (c *LayeredCache) loadAndCache(ctx context.Context, key string, config *get
 
 	// 设置到Redis缓存
 	if c.remote != nil {
-		if err = c.remote.Set(ctx, key, data, redisTTL); err != nil {
+		if err = c.remote.Set(ctx, key, data, remoteTTL); err != nil {
 			return nil, err
 		}
 	}
@@ -467,7 +467,7 @@ func (c *LayeredCache) batchLoadAndCache(ctx context.Context, keys []string, con
 	// 写入正常值缓存
 	if len(result) > 0 {
 		// 计算正常值的TTL
-		memoryTTL, redisTTL := c.calculateLoaderTTL(config, false)
+		memoryTTL, remoteTTL := c.calculateLoaderTTL(config, false)
 
 		// 设置到内存缓存
 		if c.memory != nil {
@@ -476,7 +476,7 @@ func (c *LayeredCache) batchLoadAndCache(ctx context.Context, keys []string, con
 
 		// 设置到Redis缓存
 		if c.remote != nil {
-			if err = c.remote.MSet(ctx, result, redisTTL); err != nil {
+			if err = c.remote.MSet(ctx, result, remoteTTL); err != nil {
 				return nil, err
 			}
 		}
@@ -485,7 +485,7 @@ func (c *LayeredCache) batchLoadAndCache(ctx context.Context, keys []string, con
 	// 写入缺失值缓存
 	if len(missingData) > 0 {
 		// 计算缺失值的TTL
-		memoryTTL, redisTTL := c.calculateLoaderTTL(config, true)
+		memoryTTL, remoteTTL := c.calculateLoaderTTL(config, true)
 
 		// 设置到内存缓存
 		if c.memory != nil {
@@ -494,7 +494,7 @@ func (c *LayeredCache) batchLoadAndCache(ctx context.Context, keys []string, con
 
 		// 设置到Redis缓存
 		if c.remote != nil {
-			if err = c.remote.MSet(ctx, missingData, redisTTL); err != nil {
+			if err = c.remote.MSet(ctx, missingData, remoteTTL); err != nil {
 				return nil, err
 			}
 		}
@@ -504,7 +504,7 @@ func (c *LayeredCache) batchLoadAndCache(ctx context.Context, keys []string, con
 }
 
 // calculateLoaderTTL 计算内存和Redis缓存的TTL
-func (c *LayeredCache) calculateLoaderTTL(config *getOptions, isNotFound bool) (memoryTTL, redisTTL time.Duration) {
+func (c *LayeredCache) calculateLoaderTTL(config *getOptions, isNotFound bool) (memoryTTL, remoteTTL time.Duration) {
 	if isNotFound {
 		cacheNotFoundTTL := c.defaultCacheNotFoundTTL
 		if config.cacheNotFoundTTL != nil {
@@ -518,27 +518,27 @@ func (c *LayeredCache) calculateLoaderTTL(config *getOptions, isNotFound bool) (
 		memoryTTL = *config.memoryTTL
 	}
 
-	redisTTL = c.defaultRedisTTL
-	if config.redisTTL != nil {
-		redisTTL = *config.redisTTL
+	remoteTTL = c.defaultRemoteTTL
+	if config.remoteTTL != nil {
+		remoteTTL = *config.remoteTTL
 	}
 
-	return memoryTTL, redisTTL
+	return memoryTTL, remoteTTL
 }
 
 // calculateSetTTL 计算Set操作的TTL
-func (c *LayeredCache) calculateSetTTL(config *setOptions) (memoryTTL, redisTTL time.Duration) {
+func (c *LayeredCache) calculateSetTTL(config *setOptions) (memoryTTL, remoteTTL time.Duration) {
 	memoryTTL = c.defaultMemoryTTL
 	if config.memoryTTL != nil {
 		memoryTTL = *config.memoryTTL
 	}
 
-	redisTTL = c.defaultRedisTTL
-	if config.redisTTL != nil {
-		redisTTL = *config.redisTTL
+	remoteTTL = c.defaultRemoteTTL
+	if config.remoteTTL != nil {
+		remoteTTL = *config.remoteTTL
 	}
 
-	return memoryTTL, redisTTL
+	return memoryTTL, remoteTTL
 }
 
 // shouldCacheNotFound 判断是否应该缓存缺失值
@@ -593,8 +593,8 @@ func validMemoryTTL(memoryTTL time.Duration) error {
 	return nil
 }
 
-func validRedisTTL(redisTTL time.Duration) error {
-	if redisTTL <= 0 {
+func validRemoteTTL(remoteTTL time.Duration) error {
+	if remoteTTL <= 0 {
 		return errors.ErrInvalidRedisExpireTime
 	}
 	return nil
