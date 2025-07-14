@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-type Adapter interface {
+type RemoteAdapter interface {
 	Set(ctx context.Context, key string, value []byte, expire time.Duration) error
 	MSet(ctx context.Context, values map[string][]byte, expire time.Duration) error
 
@@ -13,4 +13,14 @@ type Adapter interface {
 	MGet(ctx context.Context, keys []string) (map[string][]byte, error)
 
 	Delete(ctx context.Context, key string) error
+}
+
+type MemoryAdapter interface {
+	Set(key string, value []byte, expire time.Duration) int32
+	MSet(values map[string][]byte, expire time.Duration) int32
+
+	Get(key string) ([]byte, bool)
+	MGet(keys []string) map[string][]byte
+
+	Delete(key string)
 }
