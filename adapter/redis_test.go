@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"testing"
@@ -44,35 +45,35 @@ func TestRedisAdapter_Set(t *testing.T) {
 	tests := []struct {
 		name    string
 		key     string
-		value   string
+		value   []byte
 		expire  time.Duration
 		wantErr bool
 	}{
 		{
 			name:    "成功设置键值对",
 			key:     "test-key",
-			value:   "test-value",
+			value:   []byte("test-value"),
 			expire:  time.Hour,
 			wantErr: false,
 		},
 		{
 			name:    "设置键值对无过期时间",
 			key:     "test-key-no-expire",
-			value:   "test-value",
+			value:   []byte("test-value"),
 			expire:  0,
 			wantErr: false,
 		},
 		{
 			name:    "空键名",
 			key:     "",
-			value:   "test-value",
+			value:   []byte("test-value"),
 			expire:  time.Hour,
 			wantErr: false, // Redis 允许空键名
 		},
 		{
 			name:    "空值",
 			key:     "test-empty-value",
-			value:   "",
+			value:   nil,
 			expire:  time.Hour,
 			wantErr: false,
 		},
@@ -95,7 +96,7 @@ func TestRedisAdapter_Set(t *testing.T) {
 					t.Errorf("验证设置失败: %v", err)
 					return
 				}
-				if got != tt.value {
+				if !bytes.Equal(got, tt.value) {
 					t.Errorf("Set() 设置值 = %v, want %v", got, tt.value)
 				}
 
@@ -117,39 +118,39 @@ func TestRedisAdapter_MSet(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		values  map[string]string
+		values  map[string][]byte
 		expire  time.Duration
 		wantErr bool
 	}{
 		{
 			name: "成功批量设置多个键值对",
-			values: map[string]string{
-				"key1": "value1",
-				"key2": "value2",
-				"key3": "value3",
+			values: map[string][]byte{
+				"key1": []byte("value1"),
+				"key2": []byte("value2"),
+				"key3": []byte("value3"),
 			},
 			expire:  time.Hour,
 			wantErr: false,
 		},
 		{
 			name:    "空map",
-			values:  map[string]string{},
+			values:  map[string][]byte{},
 			expire:  time.Hour,
 			wantErr: false,
 		},
 		{
 			name: "单个键值对",
-			values: map[string]string{
-				"single-key": "single-value",
+			values: map[string][]byte{
+				"single-key": []byte("single-value"),
 			},
 			expire:  time.Minute * 30,
 			wantErr: false,
 		},
 		{
 			name: "包含空值的键值对",
-			values: map[string]string{
-				"key-with-empty": "",
-				"normal-key":     "normal-value",
+			values: map[string][]byte{
+				"key-with-empty": nil,
+				"normal-key":     []byte("normal-value"),
 			},
 			expire:  time.Hour,
 			wantErr: false,
@@ -174,7 +175,7 @@ func TestRedisAdapter_MSet(t *testing.T) {
 						t.Errorf("验证 MSet 设置失败，键 %s: %v", key, err)
 						continue
 					}
-					if got != expectedValue {
+					if !bytes.Equal(got, expectedValue) {
 						t.Errorf("MSet() 键 %s 的值 = %v, want %v", key, got, expectedValue)
 					}
 
@@ -197,9 +198,9 @@ func TestRedisAdapter_Get(t *testing.T) {
 
 	// 预设一些测试数据
 	ctx := context.Background()
-	testData := map[string]string{
-		"existing-key": "existing-value",
-		"empty-value":  "",
+	testData := map[string][]byte{
+		"existing-key": []byte("existing-value"),
+		"empty-value":  nil,
 	}
 
 	for key, value := range testData {
@@ -211,28 +212,28 @@ func TestRedisAdapter_Get(t *testing.T) {
 	tests := []struct {
 		name        string
 		key         string
-		want        string
+		want        []byte
 		wantErr     bool
 		expectedErr error
 	}{
 		{
 			name:        "获取存在的键",
 			key:         "existing-key",
-			want:        "existing-value",
+			want:        []byte("existing-value"),
 			wantErr:     false,
 			expectedErr: nil,
 		},
 		{
 			name:        "获取空值的键",
 			key:         "empty-value",
-			want:        "",
+			want:        nil,
 			wantErr:     false,
 			expectedErr: nil,
 		},
 		{
 			name:        "获取不存在的键",
 			key:         "non-existing-key",
-			want:        "",
+			want:        nil,
 			wantErr:     true,
 			expectedErr: errors.ErrNotFound,
 		},
@@ -254,7 +255,7 @@ func TestRedisAdapter_Get(t *testing.T) {
 				}
 			}
 
-			if !tt.wantErr && got != tt.want {
+			if !tt.wantErr && !bytes.Equal(got, tt.want) {
 				t.Errorf("Get() = %v, want %v", got, tt.want)
 			}
 		})
@@ -267,10 +268,10 @@ func TestRedisAdapter_MGet(t *testing.T) {
 
 	// 预设一些测试数据
 	ctx := context.Background()
-	testData := map[string]string{
-		"key1": "value1",
-		"key2": "value2",
-		"key3": "",
+	testData := map[string][]byte{
+		"key1": []byte("value1"),
+		"key2": []byte("value2"),
+		"key3": nil,
 	}
 
 	for key, value := range testData {
@@ -282,24 +283,24 @@ func TestRedisAdapter_MGet(t *testing.T) {
 	tests := []struct {
 		name    string
 		keys    []string
-		want    map[string]string
+		want    map[string][]byte
 		wantErr bool
 	}{
 		{
 			name: "获取多个存在的键",
 			keys: []string{"key1", "key2"},
-			want: map[string]string{
-				"key1": "value1",
-				"key2": "value2",
+			want: map[string][]byte{
+				"key1": []byte("value1"),
+				"key2": []byte("value2"),
 			},
 			wantErr: false,
 		},
 		{
 			name: "获取存在和不存在的键混合",
 			keys: []string{"key1", "non-existing", "key2"},
-			want: map[string]string{
-				"key1": "value1",
-				"key2": "value2",
+			want: map[string][]byte{
+				"key1": []byte("value1"),
+				"key2": []byte("value2"),
 				// "non-existing" 应该被忽略
 			},
 			wantErr: false,
@@ -307,21 +308,21 @@ func TestRedisAdapter_MGet(t *testing.T) {
 		{
 			name: "获取空值的键",
 			keys: []string{"key3"},
-			want: map[string]string{
-				"key3": "",
+			want: map[string][]byte{
+				"key3": nil,
 			},
 			wantErr: false,
 		},
 		{
 			name:    "空键列表",
 			keys:    []string{},
-			want:    map[string]string{},
+			want:    map[string][]byte{},
 			wantErr: false,
 		},
 		{
 			name:    "全部不存在的键",
 			keys:    []string{"non-existing1", "non-existing2"},
-			want:    map[string]string{},
+			want:    map[string][]byte{},
 			wantErr: false,
 		},
 	}
@@ -344,7 +345,7 @@ func TestRedisAdapter_MGet(t *testing.T) {
 				for key, expectedValue := range tt.want {
 					if actualValue, exists := got[key]; !exists {
 						t.Errorf("MGet() 缺少键 %s", key)
-					} else if actualValue != expectedValue {
+					} else if !bytes.Equal(actualValue, expectedValue) {
 						t.Errorf("MGet() 键 %s 的值 = %v, want %v", key, actualValue, expectedValue)
 					}
 				}
@@ -369,7 +370,7 @@ func TestRedisAdapter_Delete(t *testing.T) {
 	testKeys := []string{"to-delete-1", "to-delete-2"}
 
 	for _, key := range testKeys {
-		if err := adapter.Set(ctx, key, "test-value", time.Hour); err != nil {
+		if err := adapter.Set(ctx, key, []byte("test-value"), time.Hour); err != nil {
 			t.Fatalf("预设测试数据失败: %v", err)
 		}
 	}
@@ -428,7 +429,7 @@ func TestRedisAdapter_ContextCancellation(t *testing.T) {
 	cancel() // 立即取消上下文
 
 	// 所有操作都应该返回上下文取消错误
-	err := adapter.Set(ctx, "test-key", "test-value", time.Hour)
+	err := adapter.Set(ctx, "test-key", []byte("test-value"), time.Hour)
 	if err == nil {
 		t.Error("Set() 在取消的上下文中应该返回错误")
 	}
@@ -448,7 +449,7 @@ func TestRedisAdapter_ContextCancellation(t *testing.T) {
 		t.Error("MGet() 在取消的上下文中应该返回错误")
 	}
 
-	err = adapter.MSet(ctx, map[string]string{"test-key": "test-value"}, time.Hour)
+	err = adapter.MSet(ctx, map[string][]byte{"test-key": []byte("test-value")}, time.Hour)
 	if err == nil {
 		t.Error("MSet() 在取消的上下文中应该返回错误")
 	}
@@ -465,7 +466,7 @@ func TestRedisAdapter_ContextTimeout(t *testing.T) {
 	// 等待超时
 	time.Sleep(1 * time.Millisecond)
 
-	err := adapter.Set(ctx, "test-key", "test-value", time.Hour)
+	err := adapter.Set(ctx, "test-key", []byte("test-value"), time.Hour)
 	if err == nil {
 		t.Error("Set() 在超时的上下文中应该返回错误")
 	}
@@ -497,7 +498,7 @@ func BenchmarkRedisAdapter_Set(b *testing.B) {
 		i := 0
 		for pb.Next() {
 			key := fmt.Sprintf("bench-key-%d", i)
-			value := fmt.Sprintf("bench-value-%d", i)
+			value := []byte(fmt.Sprintf("bench-value-%d", i))
 			_ = adapter.Set(ctx, key, value, time.Hour)
 			i++
 		}
@@ -517,7 +518,7 @@ func BenchmarkRedisAdapter_Get(b *testing.B) {
 	// 预设数据
 	for i := 0; i < 1000; i++ {
 		key := fmt.Sprintf("bench-key-%d", i)
-		value := fmt.Sprintf("bench-value-%d", i)
+		value := []byte(fmt.Sprintf("bench-value-%d", i))
 		_ = adapter.Set(ctx, key, value, time.Hour)
 	}
 
@@ -545,7 +546,7 @@ func BenchmarkRedisAdapter_MGet(b *testing.B) {
 	// 预设数据
 	for i := 0; i < 1000; i++ {
 		key := fmt.Sprintf("bench-key-%d", i)
-		value := fmt.Sprintf("bench-value-%d", i)
+		value := []byte(fmt.Sprintf("bench-value-%d", i))
 		_ = adapter.Set(ctx, key, value, time.Hour)
 	}
 

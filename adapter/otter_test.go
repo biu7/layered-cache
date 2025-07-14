@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"testing"
@@ -78,7 +79,7 @@ func TestOtterAdapter_Set(t *testing.T) {
 	tests := []struct {
 		name    string
 		key     string
-		value   string
+		value   []byte
 		expire  time.Duration
 		wantErr bool
 		reason  string
@@ -86,7 +87,7 @@ func TestOtterAdapter_Set(t *testing.T) {
 		{
 			name:    "成功设置键值对",
 			key:     "key",
-			value:   "value",
+			value:   []byte("value"),
 			expire:  time.Hour,
 			wantErr: false,
 			reason:  "应该成功",
@@ -94,7 +95,7 @@ func TestOtterAdapter_Set(t *testing.T) {
 		{
 			name:    "空键名",
 			key:     "",
-			value:   "value",
+			value:   []byte("value"),
 			expire:  time.Hour,
 			wantErr: false,
 			reason:  "空键名应该被接受",
@@ -102,7 +103,7 @@ func TestOtterAdapter_Set(t *testing.T) {
 		{
 			name:    "空值",
 			key:     "empty",
-			value:   "",
+			value:   nil,
 			expire:  time.Hour,
 			wantErr: false,
 			reason:  "空值应该被接受",
@@ -110,7 +111,7 @@ func TestOtterAdapter_Set(t *testing.T) {
 		{
 			name:    "零过期时间",
 			key:     "key",
-			value:   "value",
+			value:   []byte("value"),
 			expire:  0,
 			wantErr: true,
 			reason:  "应该报错，实现中不支持小于 1 秒的过期时间(因为 otter 不支持设置永久存储)",
@@ -118,7 +119,7 @@ func TestOtterAdapter_Set(t *testing.T) {
 		{
 			name:    "超过容量10%的大键值对",
 			key:     "large-key-that-is-very-long-and-exceeds-capacity-limit",
-			value:   "large-value-content-that-when-combined-with-the-key-exceeds-10-percent-of-total-capacity-and-should-be-dropped-by-otter-cache",
+			value:   []byte("large-value-content-that-when-combined-with-the-key-exceeds-10-percent-of-total-capacity-and-should-be-dropped-by-otter-cache"),
 			expire:  time.Minute,
 			wantErr: true, // 应该失败，因为超过了容量的10%
 			reason:  "大键值对应该被拒绝",
@@ -147,7 +148,7 @@ func TestOtterAdapter_Set(t *testing.T) {
 						t.Errorf("验证设置失败: %v", err)
 						return
 					}
-					if got != tt.value {
+					if !bytes.Equal(got, tt.value) {
 						t.Errorf("Set() 设置值 = %v, want %v", got, tt.value)
 					}
 				}
@@ -161,49 +162,49 @@ func TestOtterAdapter_MSet(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		values  map[string]string
+		values  map[string][]byte
 		expire  time.Duration
 		wantErr bool
 	}{
 		{
 			name: "成功批量设置多个小键值对",
-			values: map[string]string{
-				"k1": "v1",
-				"k2": "v2",
-				"k3": "v3",
+			values: map[string][]byte{
+				"k1": []byte("v1"),
+				"k2": []byte("v2"),
+				"k3": []byte("v3"),
 			},
 			expire:  time.Hour,
 			wantErr: false,
 		},
 		{
 			name:    "空map",
-			values:  map[string]string{},
+			values:  map[string][]byte{},
 			expire:  time.Hour,
 			wantErr: false,
 		},
 		{
 			name: "单个键值对",
-			values: map[string]string{
-				"single": "value",
+			values: map[string][]byte{
+				"single": []byte("value"),
 			},
 			expire:  time.Minute * 30,
 			wantErr: false,
 		},
 		{
 			name: "包含空值的键值对",
-			values: map[string]string{
-				"empty":  "",
-				"normal": "value",
+			values: map[string][]byte{
+				"empty":  nil,
+				"normal": []byte("value"),
 			},
 			expire:  time.Hour,
 			wantErr: false,
 		},
 		{
 			name: "适量键值对", // 减少数量，避免容量问题
-			values: func() map[string]string {
-				values := make(map[string]string)
+			values: func() map[string][]byte {
+				values := make(map[string][]byte)
 				for i := 0; i < 10; i++ { // 从100减少到10
-					values[fmt.Sprintf("k%d", i)] = fmt.Sprintf("v%d", i)
+					values[fmt.Sprintf("k%d", i)] = []byte(fmt.Sprintf("v%d", i))
 				}
 				return values
 			}(),
@@ -231,7 +232,7 @@ func TestOtterAdapter_MSet(t *testing.T) {
 						t.Logf("键 %s 未能获取: %v", key, err)
 						continue
 					}
-					if got != expectedValue {
+					if !bytes.Equal(got, expectedValue) {
 						t.Errorf("MSet() 键 %s 的值 = %v, want %v", key, got, expectedValue)
 					} else {
 						successCount++
@@ -248,9 +249,9 @@ func TestOtterAdapter_Get(t *testing.T) {
 
 	// 预设一些测试数据
 	ctx := context.Background()
-	testData := map[string]string{
-		"existing": "value",
-		"empty":    "",
+	testData := map[string][]byte{
+		"existing": []byte("value"),
+		"empty":    nil,
 	}
 
 	for key, value := range testData {
@@ -262,28 +263,28 @@ func TestOtterAdapter_Get(t *testing.T) {
 	tests := []struct {
 		name        string
 		key         string
-		want        string
+		want        []byte
 		wantErr     bool
 		expectedErr error
 	}{
 		{
 			name:        "获取存在的键",
 			key:         "existing",
-			want:        "value",
+			want:        []byte("value"),
 			wantErr:     false,
 			expectedErr: nil,
 		},
 		{
 			name:        "获取空值的键",
 			key:         "empty",
-			want:        "",
+			want:        nil,
 			wantErr:     false,
 			expectedErr: nil,
 		},
 		{
 			name:        "获取不存在的键",
 			key:         "missing",
-			want:        "",
+			want:        nil,
 			wantErr:     true,
 			expectedErr: errors.ErrNotFound,
 		},
@@ -305,7 +306,7 @@ func TestOtterAdapter_Get(t *testing.T) {
 				}
 			}
 
-			if !tt.wantErr && got != tt.want {
+			if !tt.wantErr && !bytes.Equal(got, tt.want) {
 				t.Errorf("Get() = %v, want %v", got, tt.want)
 			}
 		})
@@ -317,10 +318,10 @@ func TestOtterAdapter_MGet(t *testing.T) {
 
 	// 预设一些测试数据
 	ctx := context.Background()
-	testData := map[string]string{
-		"k1": "v1",
-		"k2": "v2",
-		"k3": "",
+	testData := map[string][]byte{
+		"k1": []byte("v1"),
+		"k2": []byte("v2"),
+		"k3": nil,
 	}
 
 	for key, value := range testData {
@@ -332,24 +333,24 @@ func TestOtterAdapter_MGet(t *testing.T) {
 	tests := []struct {
 		name    string
 		keys    []string
-		want    map[string]string
+		want    map[string][]byte
 		wantErr bool
 	}{
 		{
 			name: "获取多个存在的键",
 			keys: []string{"k1", "k2"},
-			want: map[string]string{
-				"k1": "v1",
-				"k2": "v2",
+			want: map[string][]byte{
+				"k1": []byte("v1"),
+				"k2": []byte("v2"),
 			},
 			wantErr: false,
 		},
 		{
 			name: "获取存在和不存在的键混合",
 			keys: []string{"k1", "missing", "k2"},
-			want: map[string]string{
-				"k1": "v1",
-				"k2": "v2",
+			want: map[string][]byte{
+				"k1": []byte("v1"),
+				"k2": []byte("v2"),
 				// "missing" 应该被忽略
 			},
 			wantErr: false,
@@ -357,21 +358,21 @@ func TestOtterAdapter_MGet(t *testing.T) {
 		{
 			name: "获取空值的键",
 			keys: []string{"k3"},
-			want: map[string]string{
-				"k3": "",
+			want: map[string][]byte{
+				"k3": nil,
 			},
 			wantErr: false,
 		},
 		{
 			name:    "空键列表",
 			keys:    []string{},
-			want:    map[string]string{},
+			want:    map[string][]byte{},
 			wantErr: false,
 		},
 		{
 			name:    "全部不存在的键",
 			keys:    []string{"missing1", "missing2"},
-			want:    map[string]string{},
+			want:    map[string][]byte{},
 			wantErr: false,
 		},
 	}
@@ -394,7 +395,7 @@ func TestOtterAdapter_MGet(t *testing.T) {
 				for key, expectedValue := range tt.want {
 					if actualValue, exists := got[key]; !exists {
 						t.Errorf("MGet() 缺少键 %s", key)
-					} else if actualValue != expectedValue {
+					} else if !bytes.Equal(actualValue, expectedValue) {
 						t.Errorf("MGet() 键 %s 的值 = %v, want %v", key, actualValue, expectedValue)
 					}
 				}
@@ -418,7 +419,7 @@ func TestOtterAdapter_Delete(t *testing.T) {
 	testKeys := []string{"del1", "del2"}
 
 	for _, key := range testKeys {
-		if err := adapter.Set(ctx, key, "value", time.Hour); err != nil {
+		if err := adapter.Set(ctx, key, []byte("value"), time.Hour); err != nil {
 			t.Fatalf("预设测试数据失败: %v", err)
 		}
 	}
@@ -475,7 +476,7 @@ func TestOtterAdapter_TTL(t *testing.T) {
 	// 测试过期时间功能 - 注意：Otter 的过期可能是惰性的
 	t.Run("过期时间测试", func(t *testing.T) {
 		key := "expire"
-		value := "value"
+		value := []byte("value")
 		expireTime := time.Second * 1
 
 		err := adapter.Set(ctx, key, value, expireTime)
@@ -488,7 +489,7 @@ func TestOtterAdapter_TTL(t *testing.T) {
 		if err != nil {
 			t.Fatalf("过期前应该能获取到键: %v", err)
 		}
-		if got != value {
+		if !bytes.Equal(got, value) {
 			t.Errorf("过期前获取的值 = %v, want %v", got, value)
 		}
 
@@ -512,7 +513,7 @@ func TestOtterAdapter_TTL(t *testing.T) {
 
 	t.Run("较长过期时间的键应该保持可访问", func(t *testing.T) {
 		key := "long-expire"
-		value := "value"
+		value := []byte("value")
 
 		err := adapter.Set(ctx, key, value, time.Hour)
 		if err != nil {
@@ -527,7 +528,7 @@ func TestOtterAdapter_TTL(t *testing.T) {
 		if err != nil {
 			t.Fatalf("长过期时间的键应该仍然存在: %v", err)
 		}
-		if got != value {
+		if !bytes.Equal(got, value) {
 			t.Errorf("获取的值 = %v, want %v", got, value)
 		}
 	})
@@ -548,7 +549,7 @@ func TestOtterAdapter_Capacity(t *testing.T) {
 
 		successCount := 0
 		for key, value := range smallData {
-			err := adapter.Set(ctx, key, value, time.Hour)
+			err := adapter.Set(ctx, key, []byte(value), time.Hour)
 			if err != nil {
 				t.Logf("Set() 键 %s 失败: %v", key, err)
 			} else {
@@ -559,8 +560,8 @@ func TestOtterAdapter_Capacity(t *testing.T) {
 		t.Logf("小键值对设置成功 %d/%d", successCount, len(smallData))
 
 		// 测试超过10%限制的大键值对
-		largeKey := "large-key" // 9字节
-		largeValue := "large"   // 5字节，总共14字节 > 10字节 (10%)
+		largeKey := "large-key"       // 9字节
+		largeValue := []byte("large") // 5字节，总共14字节 > 10字节 (10%)
 		err := adapter.Set(ctx, largeKey, largeValue, time.Hour)
 		if err == nil {
 			t.Error("大键值对应该被拒绝，但设置成功了")
@@ -580,7 +581,7 @@ func TestOtterAdapter_ContextIndependence(t *testing.T) {
 		cancel() // 立即取消上下文
 
 		// 所有操作仍应正常工作
-		err := adapter.Set(ctx, "ctx", "value", time.Hour)
+		err := adapter.Set(ctx, "ctx", []byte("value"), time.Hour)
 		if err != nil {
 			t.Errorf("Set() 在取消的上下文中失败: %v", err)
 		}
@@ -589,7 +590,7 @@ func TestOtterAdapter_ContextIndependence(t *testing.T) {
 		if err != nil {
 			t.Errorf("Get() 在取消的上下文中失败: %v", err)
 		}
-		if val != "value" {
+		if !bytes.Equal(val, []byte("value")) {
 			t.Errorf("Get() 返回值 = %v, want %v", val, "value")
 		}
 
@@ -616,8 +617,8 @@ func TestOtterAdapter_ConcurrentAccess(t *testing.T) {
 			go func(id int) {
 				defer func() { done <- true }()
 				for j := 0; j < itemsPerGoroutine; j++ {
-					key := fmt.Sprintf("c%d%d", id, j)   // 更短的键名
-					value := fmt.Sprintf("v%d%d", id, j) // 更短的值
+					key := fmt.Sprintf("c%d%d", id, j)           // 更短的键名
+					value := []byte(fmt.Sprintf("v%d%d", id, j)) // 更短的值
 					_ = adapter.Set(ctx, key, value, time.Hour)
 				}
 			}(i)
@@ -636,7 +637,7 @@ func TestOtterAdapter_ConcurrentAccess(t *testing.T) {
 				key := fmt.Sprintf("c%d%d", i, j)
 				expectedValue := fmt.Sprintf("v%d%d", i, j)
 
-				if value, err := adapter.Get(ctx, key); err == nil && value == expectedValue {
+				if value, err := adapter.Get(ctx, key); err == nil && bytes.Equal(value, []byte(expectedValue)) {
 					successCount++
 				}
 			}
