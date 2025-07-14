@@ -28,7 +28,7 @@ func NewRedisAdapterWithClient(client redis.Cmdable) *RedisAdapter {
 	return &RedisAdapter{client: client}
 }
 
-func (r *RedisAdapter) Set(ctx context.Context, key string, value string, expire time.Duration) error {
+func (r *RedisAdapter) Set(ctx context.Context, key string, value []byte, expire time.Duration) error {
 	err := r.client.Set(ctx, key, value, expire).Err()
 	if err != nil {
 		return fmt.Errorf("redis set %s: %w", key, err)
@@ -36,7 +36,7 @@ func (r *RedisAdapter) Set(ctx context.Context, key string, value string, expire
 	return nil
 }
 
-func (r *RedisAdapter) MSet(ctx context.Context, values map[string]string, expire time.Duration) error {
+func (r *RedisAdapter) MSet(ctx context.Context, values map[string][]byte, expire time.Duration) error {
 	pipeline := r.client.Pipeline()
 
 	for key, val := range values {
@@ -49,19 +49,19 @@ func (r *RedisAdapter) MSet(ctx context.Context, values map[string]string, expir
 	return nil
 }
 
-func (r *RedisAdapter) Get(ctx context.Context, key string) (string, error) {
-	val, err := r.client.Get(ctx, key).Result()
+func (r *RedisAdapter) Get(ctx context.Context, key string) ([]byte, error) {
+	val, err := r.client.Get(ctx, key).Bytes()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return "", errors.ErrNotFound
+			return nil, errors.ErrNotFound
 		}
-		return "", fmt.Errorf("redis get %s: %w", key, err)
+		return nil, fmt.Errorf("redis get %s: %w", key, err)
 	}
 	return val, nil
 }
 
-func (r *RedisAdapter) MGet(ctx context.Context, keys []string) (map[string]string, error) {
-	ret := make(map[string]string)
+func (r *RedisAdapter) MGet(ctx context.Context, keys []string) (map[string][]byte, error) {
+	ret := make(map[string][]byte, len(keys))
 	if len(keys) == 0 {
 		return ret, nil
 	}
@@ -73,7 +73,7 @@ func (r *RedisAdapter) MGet(ctx context.Context, keys []string) (map[string]stri
 		if vals[i] == nil {
 			continue
 		}
-		ret[key] = vals[i].(string)
+		ret[key] = []byte(vals[i].(string))
 	}
 	return ret, nil
 }
