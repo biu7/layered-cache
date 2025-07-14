@@ -1,11 +1,11 @@
-package adapter
+package storage
 
 import (
 	"context"
 	"time"
 )
 
-type RemoteAdapter interface {
+type Remote interface {
 	Set(ctx context.Context, key string, value []byte, expire time.Duration) error
 	MSet(ctx context.Context, values map[string][]byte, expire time.Duration) error
 
@@ -18,7 +18,7 @@ type RemoteAdapter interface {
 	TTL(ctx context.Context, key string) (time.Duration, error)
 }
 
-type MemoryAdapter interface {
+type Memory interface {
 	Set(key string, value []byte, expire time.Duration) int32
 	MSet(values map[string][]byte, expire time.Duration) int32
 

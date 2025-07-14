@@ -1,4 +1,4 @@
-package adapter
+package storage
 
 import (
 	"context"
@@ -9,26 +9,26 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-var _ RemoteAdapter = (*RedisAdapter)(nil)
+var _ Remote = (*Redis)(nil)
 
-type RedisAdapter struct {
+type Redis struct {
 	client redis.Cmdable
 }
 
-func NewRedisAdapter(redisURL string) (*RedisAdapter, error) {
+func NewRedis(redisURL string) (*Redis, error) {
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
 		return nil, fmt.Errorf("redis parse url: %w", err)
 	}
 	client := redis.NewClient(opt)
-	return NewRedisAdapterWithClient(client), nil
+	return NewRedisWithClient(client), nil
 }
 
-func NewRedisAdapterWithClient(client redis.Cmdable) *RedisAdapter {
-	return &RedisAdapter{client: client}
+func NewRedisWithClient(client redis.Cmdable) *Redis {
+	return &Redis{client: client}
 }
 
-func (r *RedisAdapter) Set(ctx context.Context, key string, value []byte, expire time.Duration) error {
+func (r *Redis) Set(ctx context.Context, key string, value []byte, expire time.Duration) error {
 	err := r.client.Set(ctx, key, value, expire).Err()
 	if err != nil {
 		return fmt.Errorf("redis set %s: %w", key, err)
@@ -36,7 +36,7 @@ func (r *RedisAdapter) Set(ctx context.Context, key string, value []byte, expire
 	return nil
 }
 
-func (r *RedisAdapter) MSet(ctx context.Context, values map[string][]byte, expire time.Duration) error {
+func (r *Redis) MSet(ctx context.Context, values map[string][]byte, expire time.Duration) error {
 	pipeline := r.client.Pipeline()
 
 	for key, val := range values {
@@ -49,7 +49,7 @@ func (r *RedisAdapter) MSet(ctx context.Context, values map[string][]byte, expir
 	return nil
 }
 
-func (r *RedisAdapter) Get(ctx context.Context, key string) ([]byte, error) {
+func (r *Redis) Get(ctx context.Context, key string) ([]byte, error) {
 	val, err := r.client.Get(ctx, key).Bytes()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
@@ -60,7 +60,7 @@ func (r *RedisAdapter) Get(ctx context.Context, key string) ([]byte, error) {
 	return val, nil
 }
 
-func (r *RedisAdapter) MGet(ctx context.Context, keys []string) (map[string][]byte, error) {
+func (r *Redis) MGet(ctx context.Context, keys []string) (map[string][]byte, error) {
 	ret := make(map[string][]byte, len(keys))
 	if len(keys) == 0 {
 		return ret, nil
@@ -78,7 +78,7 @@ func (r *RedisAdapter) MGet(ctx context.Context, keys []string) (map[string][]by
 	return ret, nil
 }
 
-func (r *RedisAdapter) Delete(ctx context.Context, key string) error {
+func (r *Redis) Delete(ctx context.Context, key string) error {
 	err := r.client.Del(ctx, key).Err()
 	if err != nil {
 		return fmt.Errorf("redis del %s: %w", key, err)
@@ -86,7 +86,7 @@ func (r *RedisAdapter) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
-func (r *RedisAdapter) TTL(ctx context.Context, key string) (time.Duration, error) {
+func (r *Redis) TTL(ctx context.Context, key string) (time.Duration, error) {
 	ttl, err := r.client.TTL(ctx, key).Result()
 	if err != nil {
 		return 0, fmt.Errorf("redis ttl %s: %w", key, err)

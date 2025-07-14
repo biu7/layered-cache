@@ -27,57 +27,57 @@ go get github.com/biu7/layered-cache
 package main
 
 import (
-    "context"
-    "time"
-    
-    "github.com/biu7/layered-cache"
-    "github.com/biu7/layered-cache/adapter"
-    "github.com/redis/go-redis/v9"
+	"context"
+	"time"
+
+	"github.com/biu7/layered-cache"
+	"github.com/biu7/layered-cache/storage"
+	"github.com/redis/go-redis/v9"
 )
 
 type User struct {
-    ID   int64  `json:"id"`
-    Name string `json:"name"`
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 func main() {
-    // 创建内存适配器
-    memory, _ := adapter.NewOtterAdapter(100_000) // 100KB
-    
-    // 创建 Redis 适配器
-    rdb := redis.NewClient(&redis.Options{
-        Addr: "localhost:6379",
-    })
-    redisCache := adapter.NewRedisAdapterWithClient(rdb)
-    
-    // 创建缓存实例
-    c, _ := cache.NewCache(
-        cache.WithMemory(memory),
-        cache.WithRedis(redisCache),
-        cache.WithDefaultTTL(time.Minute, 24*time.Hour),
-        cache.WithDefaultCacheNotFound(true, time.Minute),
-    )
-    
-    // 使用泛型缓存
-    userCache := cache.Typed[User](c)
-    
-    ctx := context.Background()
-    user := User{ID: 1, Name: "Alice"}
-    
-    // 设置缓存
-    userCache.Set(ctx, "user:1", user)
-    
-    // 获取缓存
-    cachedUser, err := userCache.Get(ctx, "user:1", nil)
-    if err != nil {
-        panic(err)
-    }
-    
-    // 带 loader 的获取
-    user, err = userCache.Get(ctx, "user:2", func(ctx context.Context, key string) (User, error) {
-        // 从数据库获取
-        return User{ID: 2, Name: "Bob"}, nil
-    })
+	// 创建内存适配器
+	memory, _ := storage.NewOtter(100_000) // 100KB
+
+	// 创建 Redis 适配器
+	rdb := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+	redisCache := storage.NewRedisWithClient(rdb)
+
+	// 创建缓存实例
+	c, _ := cache.NewCache(
+		cache.WithConfigMemory(memory),
+		cache.WithConfigRemote(redisCache),
+		cache.WithConfigDefaultTTL(time.Minute, 24*time.Hour),
+		cache.WithConfigDefaultCacheNotFound(true, time.Minute),
+	)
+
+	// 使用泛型缓存
+	userCache := cache.Typed[User](c)
+
+	ctx := context.Background()
+	user := User{ID: 1, Name: "Alice"}
+
+	// 设置缓存
+	userCache.Set(ctx, "user:1", user)
+
+	// 获取缓存
+	cachedUser, err := userCache.Get(ctx, "user:1", nil)
+	if err != nil {
+		panic(err)
+	}
+
+	// 带 loader 的获取
+	user, err = userCache.Get(ctx, "user:2", func(ctx context.Context, key string) (User, error) {
+		// 从数据库获取
+		return User{ID: 2, Name: "Bob"}, nil
+	})
 }
 ```
 
@@ -115,57 +115,57 @@ go get github.com/biu7/layered-cache
 package main
 
 import (
-    "context"
-    "time"
-    
-    "github.com/biu7/layered-cache"
-    "github.com/biu7/layered-cache/adapter"
-    "github.com/redis/go-redis/v9"
+	"context"
+	"time"
+
+	"github.com/biu7/layered-cache"
+	"github.com/biu7/layered-cache/storage"
+	"github.com/redis/go-redis/v9"
 )
 
 type User struct {
-    ID   int64  `json:"id"`
-    Name string `json:"name"`
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 func main() {
-    // Create memory adapter
-    memory, _ := adapter.NewOtterAdapter(100_000) // 100KB
-    
-    // Create Redis adapter
-    rdb := redis.NewClient(&redis.Options{
-        Addr: "localhost:6379",
-    })
-    redisCache := adapter.NewRedisAdapterWithClient(rdb)
-    
-    // Create cache instance
-    c, _ := cache.NewCache(
-        cache.WithMemory(memory),
-        cache.WithRedis(redisCache),
-        cache.WithDefaultTTL(time.Minute, 24*time.Hour),
-        cache.WithDefaultCacheNotFound(true, time.Minute),
-    )
-    
-    // Use typed cache
-    userCache := cache.Typed[User](c)
-    
-    ctx := context.Background()
-    user := User{ID: 1, Name: "Alice"}
-    
-    // Set cache
-    userCache.Set(ctx, "user:1", user)
-    
-    // Get cache
-    cachedUser, err := userCache.Get(ctx, "user:1", nil)
-    if err != nil {
-        panic(err)
-    }
-    
-    // Get with loader
-    user, err = userCache.Get(ctx, "user:2", func(ctx context.Context, key string) (User, error) {
-        // Load from database
-        return User{ID: 2, Name: "Bob"}, nil
-    })
+	// Create memory adapter
+	memory, _ := storage.NewOtter(100_000) // 100KB
+
+	// Create Redis adapter
+	rdb := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+	redisCache := storage.NewRedisWithClient(rdb)
+
+	// Create cache instance
+	c, _ := cache.NewCache(
+		cache.WithConfigMemory(memory),
+		cache.WithConfigRemote(redisCache),
+		cache.WithConfigDefaultTTL(time.Minute, 24*time.Hour),
+		cache.WithConfigDefaultCacheNotFound(true, time.Minute),
+	)
+
+	// Use typed cache
+	userCache := cache.Typed[User](c)
+
+	ctx := context.Background()
+	user := User{ID: 1, Name: "Alice"}
+
+	// Set cache
+	userCache.Set(ctx, "user:1", user)
+
+	// Get cache
+	cachedUser, err := userCache.Get(ctx, "user:1", nil)
+	if err != nil {
+		panic(err)
+	}
+
+	// Get with loader
+	user, err = userCache.Get(ctx, "user:2", func(ctx context.Context, key string) (User, error) {
+		// Load from database
+		return User{ID: 2, Name: "Bob"}, nil
+	})
 }
 ```
 
