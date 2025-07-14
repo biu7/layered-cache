@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/biu7/layered-cache/adapter"
-	"github.com/biu7/layered-cache/errors"
 	"github.com/biu7/layered-cache/serializer"
 )
 
@@ -86,15 +85,6 @@ func WithDefaultTTL(memoryTTL, redisTTL time.Duration) Option {
 	return defaultTTLOption{memoryTTL: memoryTTL, redisTTL: redisTTL}
 }
 
-// validateTTL 校验TTL的有效性
-func validateTTL(memoryTTL, redisTTL time.Duration) error {
-	// 校验TTL
-	if memoryTTL <= 0 || redisTTL <= 0 {
-		return errors.ErrInvalidExpireTime
-	}
-	return nil
-}
-
 // withDefaultCacheMissing 设置默认缺失值缓存选项
 type withDefaultCacheMissing struct {
 	cacheMissing bool
@@ -108,10 +98,6 @@ func (w withDefaultCacheMissing) apply(opts *options) {
 
 // WithDefaultCacheMissing 设置默认缺失值缓存选项
 func WithDefaultCacheMissing(cacheMissing bool, missingTTL time.Duration) Option {
-	// 校验TTL有效性
-	if err := validateTTL(0, missingTTL); err != nil {
-		panic(err)
-	}
 	return withDefaultCacheMissing{cacheMissing: cacheMissing, missingTTL: missingTTL}
 }
 
