@@ -1,4 +1,4 @@
-package adapter
+package storage
 
 import (
 	"fmt"
@@ -7,13 +7,13 @@ import (
 	"github.com/maypok86/otter"
 )
 
-var _ MemoryAdapter = (*OtterAdapter)(nil)
+var _ Memory = (*Otter)(nil)
 
-type OtterAdapter struct {
+type Otter struct {
 	client *otter.CacheWithVariableTTL[string, []byte]
 }
 
-func NewOtterAdapter(maxMemory int) (*OtterAdapter, error) {
+func NewOtter(maxMemory int) (*Otter, error) {
 	if maxMemory <= 0 {
 		return nil, fmt.Errorf("otter create: invalid maxMemory: %d", maxMemory)
 	}
@@ -26,21 +26,21 @@ func NewOtterAdapter(maxMemory int) (*OtterAdapter, error) {
 	if err != nil {
 		return nil, fmt.Errorf("otter create: capacity %d: %w", maxMemory, err)
 	}
-	return &OtterAdapter{
+	return &Otter{
 		client: &cache,
 	}, nil
 }
 
-func NewOtterAdapterWithClient(client *otter.CacheWithVariableTTL[string, []byte]) (*OtterAdapter, error) {
+func NewOtterWithClient(client *otter.CacheWithVariableTTL[string, []byte]) (*Otter, error) {
 	if client == nil {
 		return nil, fmt.Errorf("otter create: cache is nil")
 	}
-	return &OtterAdapter{
+	return &Otter{
 		client: client,
 	}, nil
 }
 
-func (o *OtterAdapter) Set(key string, value []byte, expire time.Duration) int32 {
+func (o *Otter) Set(key string, value []byte, expire time.Duration) int32 {
 	if expire < 0 {
 		expire = 0
 	}
@@ -52,7 +52,7 @@ func (o *OtterAdapter) Set(key string, value []byte, expire time.Duration) int32
 	return count
 }
 
-func (o *OtterAdapter) MSet(values map[string][]byte, expire time.Duration) int32 {
+func (o *Otter) MSet(values map[string][]byte, expire time.Duration) int32 {
 	if expire < 0 {
 		expire = 0
 	}
@@ -66,11 +66,11 @@ func (o *OtterAdapter) MSet(values map[string][]byte, expire time.Duration) int3
 	return count
 }
 
-func (o *OtterAdapter) Get(key string) ([]byte, bool) {
+func (o *Otter) Get(key string) ([]byte, bool) {
 	return o.client.Get(key)
 }
 
-func (o *OtterAdapter) MGet(keys []string) map[string][]byte {
+func (o *Otter) MGet(keys []string) map[string][]byte {
 	ret := make(map[string][]byte)
 	for _, key := range keys {
 		val, success := o.client.Get(key)
@@ -82,6 +82,6 @@ func (o *OtterAdapter) MGet(keys []string) map[string][]byte {
 	return ret
 }
 
-func (o *OtterAdapter) Delete(key string) {
+func (o *Otter) Delete(key string) {
 	o.client.Delete(key)
 }

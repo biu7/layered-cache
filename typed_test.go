@@ -29,8 +29,8 @@ func createTestCache(t *testing.T) Cache {
 	t.Helper()
 
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
@@ -43,7 +43,7 @@ func createMemoryOnlyCache(t *testing.T) Cache {
 	t.Helper()
 
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
@@ -56,7 +56,7 @@ func createRedisOnlyCache(t *testing.T) Cache {
 	t.Helper()
 
 	cache, err := NewCache(
-		WithRedis(createRedisAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)

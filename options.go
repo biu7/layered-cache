@@ -3,9 +3,9 @@ package cache
 import (
 	"time"
 
-	"github.com/biu7/layered-cache/adapter"
 	"github.com/biu7/layered-cache/errors"
 	"github.com/biu7/layered-cache/serializer"
+	"github.com/biu7/layered-cache/storage"
 )
 
 type Option interface {
@@ -14,11 +14,11 @@ type Option interface {
 
 // options 缓存配置
 type options struct {
-	// MemoryAdapter 内存缓存适配器
-	memoryAdapter adapter.MemoryAdapter
+	// Memory 内存缓存适配器
+	memoryAdapter storage.Memory
 
-	// redisAdapter Redis 缓存适配器
-	redisAdapter adapter.RemoteAdapter
+	// Remote 缓存适配器
+	remoteAdapter storage.Remote
 
 	// serializer 序列化器
 	serializer serializer.Serializer
@@ -26,8 +26,8 @@ type options struct {
 	// defaultMemoryTTL 默认内存缓存过期时间
 	defaultMemoryTTL time.Duration
 
-	// defaultRedisTTL 默认Redis缓存过期时间
-	defaultRedisTTL time.Duration
+	// defaultRemoteTTL 默认 Remote 缓存过期时间
+	defaultRemoteTTL time.Duration
 
 	// defaultCacheNotFound 默认是否缓存缺失值（防止缓存穿透）
 	defaultCacheNotFound bool
@@ -37,27 +37,27 @@ type options struct {
 }
 
 type memoryAdapterOption struct {
-	adapter adapter.MemoryAdapter
+	adapter storage.Memory
 }
 
 func (m memoryAdapterOption) apply(opts *options) {
 	opts.memoryAdapter = m.adapter
 }
 
-func WithMemory(adp adapter.MemoryAdapter) Option {
+func WithConfigMemory(adp storage.Memory) Option {
 	return memoryAdapterOption{adapter: adp}
 }
 
-type redisAdapterOption struct {
-	adapter adapter.RemoteAdapter
+type remoteAdapterOption struct {
+	adapter storage.Remote
 }
 
-func (r redisAdapterOption) apply(opts *options) {
-	opts.redisAdapter = r.adapter
+func (r remoteAdapterOption) apply(opts *options) {
+	opts.remoteAdapter = r.adapter
 }
 
-func WithRedis(adp adapter.RemoteAdapter) Option {
-	return redisAdapterOption{adapter: adp}
+func WithConfigRemote(adp storage.Remote) Option {
+	return remoteAdapterOption{adapter: adp}
 }
 
 type serializerOption struct {
@@ -68,38 +68,38 @@ func (s serializerOption) apply(opts *options) {
 	opts.serializer = s.serializer
 }
 
-func WithSerializer(srl serializer.Serializer) Option {
+func WithConfigSerializer(srl serializer.Serializer) Option {
 	return serializerOption{serializer: srl}
 }
 
 type defaultTTLOption struct {
 	memoryTTL time.Duration
-	redisTTL  time.Duration
+	remoteTTL time.Duration
 }
 
 func (d defaultTTLOption) apply(opts *options) {
 	opts.defaultMemoryTTL = d.memoryTTL
-	opts.defaultRedisTTL = d.redisTTL
+	opts.defaultRemoteTTL = d.remoteTTL
 }
 
-func WithDefaultTTL(memoryTTL, redisTTL time.Duration) Option {
-	return defaultTTLOption{memoryTTL: memoryTTL, redisTTL: redisTTL}
+func WithConfigDefaultTTL(memoryTTL, remoteTTL time.Duration) Option {
+	return defaultTTLOption{memoryTTL: memoryTTL, remoteTTL: remoteTTL}
 }
 
-// withDefaultCacheNotFound 设置默认缺失值缓存选项
-type withDefaultCacheNotFound struct {
+// defaultCacheNotFoundOption 设置默认缺失值缓存选项
+type defaultCacheNotFoundOption struct {
 	cacheNotFound    bool
 	cacheNotFoundTTL time.Duration
 }
 
-func (w withDefaultCacheNotFound) apply(opts *options) {
+func (w defaultCacheNotFoundOption) apply(opts *options) {
 	opts.defaultCacheNotFound = w.cacheNotFound
 	opts.defaultCacheNotFoundTTL = w.cacheNotFoundTTL
 }
 
-// WithDefaultCacheNotFound 设置默认缺失值缓存选项
-func WithDefaultCacheNotFound(cacheNotFound bool, cacheNotFoundTTL time.Duration) Option {
-	return withDefaultCacheNotFound{cacheNotFound: cacheNotFound, cacheNotFoundTTL: cacheNotFoundTTL}
+// WithConfigDefaultCacheNotFound 设置默认缺失值缓存选项
+func WithConfigDefaultCacheNotFound(cacheNotFound bool, cacheNotFoundTTL time.Duration) Option {
+	return defaultCacheNotFoundOption{cacheNotFound: cacheNotFound, cacheNotFoundTTL: cacheNotFoundTTL}
 }
 
 // applyOptions 应用选项到配置
@@ -115,14 +115,14 @@ func newOptions() *options {
 	return &options{
 		serializer:              serializer.NewSonicJson(), // 默认使用SonicJson序列化
 		defaultMemoryTTL:        5 * time.Minute,           // 默认内存缓存5分钟
-		defaultRedisTTL:         14 * 24 * time.Hour,       // 默认Redis缓存14天
+		defaultRemoteTTL:        14 * 24 * time.Hour,       // 默认Remote缓存14天
 		defaultCacheNotFound:    false,                     // 默认不缓存缺失值
 		defaultCacheNotFoundTTL: time.Minute,               // 默认缺失值缓存1分钟
 	}
 }
 
 func validateOptions(cfg *options) error {
-	if cfg.memoryAdapter == nil && cfg.redisAdapter == nil {
+	if cfg.memoryAdapter == nil && cfg.remoteAdapter == nil {
 		return errors.ErrAdapterRequired
 	}
 
@@ -132,8 +132,8 @@ func validateOptions(cfg *options) error {
 		}
 	}
 
-	if cfg.redisAdapter != nil {
-		if err := validRedisTTL(cfg.defaultRedisTTL); err != nil {
+	if cfg.remoteAdapter != nil {
+		if err := validRemoteTTL(cfg.defaultRemoteTTL); err != nil {
 			return err
 		}
 	}

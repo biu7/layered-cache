@@ -11,24 +11,24 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/biu7/layered-cache/adapter"
 	"github.com/biu7/layered-cache/errors"
 	"github.com/biu7/layered-cache/serializer"
+	"github.com/biu7/layered-cache/storage"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 )
 
-func createMemoryAdapter(t *testing.T) adapter.MemoryAdapter {
+func createMemoryAdapter(t *testing.T) storage.Memory {
 	t.Helper()
 
-	otter, err := adapter.NewOtterAdapter(1024)
+	otter, err := storage.NewOtter(1024)
 	if err != nil {
 		panic(err)
 	}
 	return otter
 }
 
-func createRedisAdapter(t *testing.T) adapter.RemoteAdapter {
+func createRemoteAdapter(t *testing.T) storage.Remote {
 	t.Helper()
 
 	s, err := miniredis.Run()
@@ -44,7 +44,7 @@ func createRedisAdapter(t *testing.T) adapter.RemoteAdapter {
 		Addr: s.Addr(),
 	})
 
-	return adapter.NewRedisAdapterWithClient(client)
+	return storage.NewRedisWithClient(client)
 }
 
 func createSerializer(t *testing.T) serializer.Serializer {
@@ -62,102 +62,102 @@ func TestNewCache(t *testing.T) {
 		{
 			name: "成功创建缓存 - 仅内存适配器",
 			options: []Option{
-				WithMemory(createMemoryAdapter(t)),
+				WithConfigMemory(createMemoryAdapter(t)),
 			},
 			wantErr: nil,
 		},
 		{
 			name: "成功创建缓存 - 仅Redis适配器",
 			options: []Option{
-				WithRedis(createRedisAdapter(t)),
+				WithConfigRemote(createRemoteAdapter(t)),
 			},
 			wantErr: nil,
 		},
 		{
 			name: "成功创建缓存 - 内存和Redis适配器",
 			options: []Option{
-				WithMemory(createMemoryAdapter(t)),
-				WithRedis(createRedisAdapter(t)),
+				WithConfigMemory(createMemoryAdapter(t)),
+				WithConfigRemote(createRemoteAdapter(t)),
 			},
 			wantErr: nil,
 		},
 		{
 			name: "成功创建缓存 - 自定义序列化器",
 			options: []Option{
-				WithMemory(createMemoryAdapter(t)),
-				WithSerializer(createSerializer(t)),
+				WithConfigMemory(createMemoryAdapter(t)),
+				WithConfigSerializer(createSerializer(t)),
 			},
 			wantErr: nil,
 		},
 		{
 			name: "成功创建缓存 - 自定义TTL",
 			options: []Option{
-				WithMemory(createMemoryAdapter(t)),
-				WithRedis(createRedisAdapter(t)),
-				WithDefaultTTL(10*time.Minute, 24*time.Hour),
+				WithConfigMemory(createMemoryAdapter(t)),
+				WithConfigRemote(createRemoteAdapter(t)),
+				WithConfigDefaultTTL(10*time.Minute, 24*time.Hour),
 			},
 			wantErr: nil,
 		},
 		{
 			name: "成功创建缓存 - 启用缺失值缓存",
 			options: []Option{
-				WithMemory(createMemoryAdapter(t)),
-				WithDefaultCacheNotFound(true, 30*time.Second),
+				WithConfigMemory(createMemoryAdapter(t)),
+				WithConfigDefaultCacheNotFound(true, 30*time.Second),
 			},
 			wantErr: nil,
 		},
 		{
 			name: "失败 - 没有适配器",
 			options: []Option{
-				WithSerializer(createSerializer(t)),
+				WithConfigSerializer(createSerializer(t)),
 			},
 			wantErr: errors.ErrAdapterRequired,
 		},
 		{
 			name: "失败 - 无效的内存TTL",
 			options: []Option{
-				WithMemory(createMemoryAdapter(t)),
-				WithDefaultTTL(0, 24*time.Hour),
+				WithConfigMemory(createMemoryAdapter(t)),
+				WithConfigDefaultTTL(0, 24*time.Hour),
 			},
 			wantErr: errors.ErrInvalidMemoryExpireTime,
 		},
 		{
 			name: "失败 - 负的内存TTL",
 			options: []Option{
-				WithMemory(createMemoryAdapter(t)),
-				WithDefaultTTL(-1*time.Minute, 24*time.Hour),
+				WithConfigMemory(createMemoryAdapter(t)),
+				WithConfigDefaultTTL(-1*time.Minute, 24*time.Hour),
 			},
 			wantErr: errors.ErrInvalidMemoryExpireTime,
 		},
 		{
 			name: "失败 - 无效的Redis TTL",
 			options: []Option{
-				WithRedis(createRedisAdapter(t)),
-				WithDefaultTTL(5*time.Minute, 0),
+				WithConfigRemote(createRemoteAdapter(t)),
+				WithConfigDefaultTTL(5*time.Minute, 0),
 			},
 			wantErr: errors.ErrInvalidRedisExpireTime,
 		},
 		{
 			name: "失败 - 负的Redis TTL",
 			options: []Option{
-				WithRedis(createRedisAdapter(t)),
-				WithDefaultTTL(5*time.Minute, -1*time.Hour),
+				WithConfigRemote(createRemoteAdapter(t)),
+				WithConfigDefaultTTL(5*time.Minute, -1*time.Hour),
 			},
 			wantErr: errors.ErrInvalidRedisExpireTime,
 		},
 		{
 			name: "失败 - 无效的缺失值缓存TTL",
 			options: []Option{
-				WithMemory(createMemoryAdapter(t)),
-				WithDefaultCacheNotFound(true, 0),
+				WithConfigMemory(createMemoryAdapter(t)),
+				WithConfigDefaultCacheNotFound(true, 0),
 			},
 			wantErr: errors.ErrInvalidCacheNotFondTTL,
 		},
 		{
 			name: "失败 - 负的缺失值缓存TTL",
 			options: []Option{
-				WithMemory(createMemoryAdapter(t)),
-				WithDefaultCacheNotFound(true, -1*time.Second),
+				WithConfigMemory(createMemoryAdapter(t)),
+				WithConfigDefaultCacheNotFound(true, -1*time.Second),
 			},
 			wantErr: errors.ErrInvalidCacheNotFondTTL,
 		},
@@ -205,7 +205,7 @@ func TestNewCache(t *testing.T) {
 }
 
 func TestNewCache_MemoryOnly(t *testing.T) {
-	cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+	cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() unexpected error = %v", err)
 	}
@@ -222,7 +222,7 @@ func TestNewCache_MemoryOnly(t *testing.T) {
 }
 
 func TestNewCache_RedisOnly(t *testing.T) {
-	cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+	cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() unexpected error = %v", err)
 	}
@@ -240,8 +240,8 @@ func TestNewCache_RedisOnly(t *testing.T) {
 
 func TestNewCache_BothAdapters(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() unexpected error = %v", err)
@@ -260,12 +260,12 @@ func TestNewCache_BothAdapters(t *testing.T) {
 
 func TestNewCache_CustomTTL(t *testing.T) {
 	memoryTTL := 30 * time.Minute
-	redisTTL := 48 * time.Hour
+	remoteTTL := 48 * time.Hour
 
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
-		WithDefaultTTL(memoryTTL, redisTTL),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
+		WithConfigDefaultTTL(memoryTTL, remoteTTL),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() unexpected error = %v", err)
@@ -277,8 +277,8 @@ func TestNewCache_CustomTTL(t *testing.T) {
 		t.Errorf("defaultMemoryTTL = %v, want %v", layeredCache.defaultMemoryTTL, memoryTTL)
 	}
 
-	if layeredCache.defaultRedisTTL != redisTTL {
-		t.Errorf("defaultRedisTTL = %v, want %v", layeredCache.defaultRedisTTL, redisTTL)
+	if layeredCache.defaultRemoteTTL != remoteTTL {
+		t.Errorf("defaultRemoteTTL = %v, want %v", layeredCache.defaultRemoteTTL, remoteTTL)
 	}
 }
 
@@ -286,8 +286,8 @@ func TestNewCache_CustomCacheMissing(t *testing.T) {
 	missingTTL := 45 * time.Second
 
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithDefaultCacheNotFound(true, missingTTL),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigDefaultCacheNotFound(true, missingTTL),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() unexpected error = %v", err)
@@ -308,8 +308,8 @@ func TestNewCache_CustomSerializer(t *testing.T) {
 	customSerializer := createSerializer(t)
 
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithSerializer(customSerializer),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigSerializer(customSerializer),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() unexpected error = %v", err)
@@ -335,7 +335,7 @@ func TestLayeredCache_Set(t *testing.T) {
 		{
 			name: "成功设置到内存缓存 - 字符串",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -351,7 +351,7 @@ func TestLayeredCache_Set(t *testing.T) {
 		{
 			name: "成功设置到Redis缓存 - 字符串",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+				cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -368,8 +368,8 @@ func TestLayeredCache_Set(t *testing.T) {
 			name: "成功设置到双层缓存 - 结构体",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -387,8 +387,8 @@ func TestLayeredCache_Set(t *testing.T) {
 			name: "成功设置 - 自定义TTL",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -406,7 +406,7 @@ func TestLayeredCache_Set(t *testing.T) {
 		{
 			name: "成功设置 - 字节数组",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -422,7 +422,7 @@ func TestLayeredCache_Set(t *testing.T) {
 		{
 			name: "成功设置 - nil值",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -438,7 +438,7 @@ func TestLayeredCache_Set(t *testing.T) {
 		{
 			name: "成功设置 - 空字符串",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -454,7 +454,7 @@ func TestLayeredCache_Set(t *testing.T) {
 		{
 			name: "失败 - 无效的内存TTL",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -468,7 +468,7 @@ func TestLayeredCache_Set(t *testing.T) {
 		{
 			name: "失败 - 负的内存TTL",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -482,7 +482,7 @@ func TestLayeredCache_Set(t *testing.T) {
 		{
 			name: "失败 - 无效的Redis TTL",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+				cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -496,7 +496,7 @@ func TestLayeredCache_Set(t *testing.T) {
 		{
 			name: "失败 - 负的Redis TTL",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+				cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -540,7 +540,7 @@ func TestLayeredCache_Set(t *testing.T) {
 }
 
 func TestLayeredCache_Set_MemoryOnly(t *testing.T) {
-	cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+	cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -560,7 +560,7 @@ func TestLayeredCache_Set_MemoryOnly(t *testing.T) {
 }
 
 func TestLayeredCache_Set_RedisOnly(t *testing.T) {
-	cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+	cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -581,8 +581,8 @@ func TestLayeredCache_Set_RedisOnly(t *testing.T) {
 
 func TestLayeredCache_Set_BothCaches(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -604,8 +604,8 @@ func TestLayeredCache_Set_BothCaches(t *testing.T) {
 
 func TestLayeredCache_Set_ComplexTypes(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -662,7 +662,7 @@ func TestLayeredCache_Set_ComplexTypes(t *testing.T) {
 }
 
 func TestLayeredCache_Set_ContextCancellation(t *testing.T) {
-	cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+	cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -892,7 +892,7 @@ func TestLayeredCache_MSet(t *testing.T) {
 		{
 			name: "成功批量设置到内存缓存 - 混合类型",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -912,7 +912,7 @@ func TestLayeredCache_MSet(t *testing.T) {
 		{
 			name: "成功批量设置到Redis缓存 - 混合类型",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+				cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -933,8 +933,8 @@ func TestLayeredCache_MSet(t *testing.T) {
 			name: "成功批量设置到双层缓存 - 复杂类型",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -959,8 +959,8 @@ func TestLayeredCache_MSet(t *testing.T) {
 			name: "成功批量设置 - 自定义TTL",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -981,7 +981,7 @@ func TestLayeredCache_MSet(t *testing.T) {
 		{
 			name: "成功批量设置 - 空映射",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -996,7 +996,7 @@ func TestLayeredCache_MSet(t *testing.T) {
 		{
 			name: "成功批量设置 - 包含空字符串和nil",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -1015,7 +1015,7 @@ func TestLayeredCache_MSet(t *testing.T) {
 		{
 			name: "失败 - 无效的内存TTL",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -1030,7 +1030,7 @@ func TestLayeredCache_MSet(t *testing.T) {
 		{
 			name: "失败 - 负的内存TTL",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -1045,7 +1045,7 @@ func TestLayeredCache_MSet(t *testing.T) {
 		{
 			name: "失败 - 无效的Redis TTL",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+				cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -1060,7 +1060,7 @@ func TestLayeredCache_MSet(t *testing.T) {
 		{
 			name: "失败 - 负的Redis TTL",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+				cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -1106,7 +1106,7 @@ func TestLayeredCache_MSet(t *testing.T) {
 }
 
 func TestLayeredCache_MSet_MemoryOnly(t *testing.T) {
-	cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+	cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -1129,7 +1129,7 @@ func TestLayeredCache_MSet_MemoryOnly(t *testing.T) {
 }
 
 func TestLayeredCache_MSet_RedisOnly(t *testing.T) {
-	cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+	cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -1153,8 +1153,8 @@ func TestLayeredCache_MSet_RedisOnly(t *testing.T) {
 
 func TestLayeredCache_MSet_BothCaches(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -1182,14 +1182,14 @@ func TestLayeredCache_MSet_BothCaches(t *testing.T) {
 
 func TestLayeredCache_MSet_LargeDataset(t *testing.T) {
 	// 为大数据集测试创建更大内存限制的适配器
-	largeMemoryAdapter, err := adapter.NewOtterAdapter(10240) // 10KB内存限制
+	largeMemoryAdapter, err := storage.NewOtter(10240) // 10KB内存限制
 	if err != nil {
-		t.Fatalf("NewOtterAdapter() error = %v", err)
+		t.Fatalf("NewOtter() error = %v", err)
 	}
 
 	cache, err := NewCache(
-		WithMemory(largeMemoryAdapter),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(largeMemoryAdapter),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -1214,7 +1214,7 @@ func TestLayeredCache_MSet_LargeDataset(t *testing.T) {
 }
 
 func TestLayeredCache_MSet_ContextCancellation(t *testing.T) {
-	cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+	cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -1295,7 +1295,7 @@ func TestLayeredCache_Delete(t *testing.T) {
 		{
 			name: "成功从内存缓存删除",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -1323,7 +1323,7 @@ func TestLayeredCache_Delete(t *testing.T) {
 		{
 			name: "成功从Redis缓存删除",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+				cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -1352,8 +1352,8 @@ func TestLayeredCache_Delete(t *testing.T) {
 			name: "成功从双层缓存删除",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -1382,7 +1382,7 @@ func TestLayeredCache_Delete(t *testing.T) {
 		{
 			name: "删除不存在的键 - 内存缓存",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -1400,7 +1400,7 @@ func TestLayeredCache_Delete(t *testing.T) {
 		{
 			name: "删除不存在的键 - Redis缓存",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+				cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -1419,8 +1419,8 @@ func TestLayeredCache_Delete(t *testing.T) {
 			name: "删除不存在的键 - 双层缓存",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -1465,7 +1465,7 @@ func TestLayeredCache_Delete(t *testing.T) {
 }
 
 func TestLayeredCache_Delete_MemoryOnly(t *testing.T) {
-	cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+	cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -1496,7 +1496,7 @@ func TestLayeredCache_Delete_MemoryOnly(t *testing.T) {
 }
 
 func TestLayeredCache_Delete_RedisOnly(t *testing.T) {
-	cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+	cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -1528,8 +1528,8 @@ func TestLayeredCache_Delete_RedisOnly(t *testing.T) {
 
 func TestLayeredCache_Delete_BothCaches(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -1562,8 +1562,8 @@ func TestLayeredCache_Delete_BothCaches(t *testing.T) {
 
 func TestLayeredCache_Delete_MultipleKeys(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -1603,14 +1603,14 @@ func TestLayeredCache_Delete_MultipleKeys(t *testing.T) {
 
 func TestLayeredCache_Delete_ComplexTypes(t *testing.T) {
 	// 为复杂类型测试使用更大的内存适配器
-	largeMemoryAdapter, err := adapter.NewOtterAdapter(10240) // 10KB内存限制
+	largeMemoryAdapter, err := storage.NewOtter(10240) // 10KB内存限制
 	if err != nil {
-		t.Fatalf("NewOtterAdapter() error = %v", err)
+		t.Fatalf("NewOtter() error = %v", err)
 	}
 
 	cache, err := NewCache(
-		WithMemory(largeMemoryAdapter),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(largeMemoryAdapter),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -1677,7 +1677,7 @@ func TestLayeredCache_Delete_ComplexTypes(t *testing.T) {
 }
 
 func TestLayeredCache_Delete_ContextCancellation(t *testing.T) {
-	cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+	cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -1710,8 +1710,8 @@ func TestLayeredCache_Delete_ContextCancellation(t *testing.T) {
 
 func TestLayeredCache_Delete_AfterMSet(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -1765,7 +1765,7 @@ func TestLayeredCache_Get(t *testing.T) {
 		{
 			name: "成功获取内存缓存中存在的值 - 字符串",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -1786,7 +1786,7 @@ func TestLayeredCache_Get(t *testing.T) {
 		{
 			name: "成功获取内存缓存中存在的值 - 结构体",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -1808,7 +1808,7 @@ func TestLayeredCache_Get(t *testing.T) {
 		{
 			name: "成功获取内存缓存中存在的值 - 字节数组",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -1831,8 +1831,8 @@ func TestLayeredCache_Get(t *testing.T) {
 			name: "成功获取内存缓存不存在，Redis存在的值 - 字符串",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -1879,8 +1879,8 @@ func TestLayeredCache_Get(t *testing.T) {
 			name: "成功获取内存缓存不存在，Redis存在的值 - 复杂结构",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -1910,8 +1910,8 @@ func TestLayeredCache_Get(t *testing.T) {
 			name: "获取内存与Redis都不存在，没有loader时 - 返回NotFound",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -1929,8 +1929,8 @@ func TestLayeredCache_Get(t *testing.T) {
 			name: "获取内存与Redis都不存在，有loader，loader成功返回 - 字符串",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -1958,8 +1958,8 @@ func TestLayeredCache_Get(t *testing.T) {
 			name: "获取内存与Redis都不存在，有loader，loader成功返回 - 结构体",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -1983,8 +1983,8 @@ func TestLayeredCache_Get(t *testing.T) {
 			name: "获取内存与Redis都不存在，有loader，loader返回自定义error",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -2007,8 +2007,8 @@ func TestLayeredCache_Get(t *testing.T) {
 			name: "获取内存与Redis都不存在，有loader，loader返回NotFound，没有空值缓存",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -2046,8 +2046,8 @@ func TestLayeredCache_Get(t *testing.T) {
 			name: "获取内存与Redis都不存在，有loader，loader返回NotFound，有空值缓存",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -2100,7 +2100,7 @@ func TestLayeredCache_Get(t *testing.T) {
 		{
 			name: "获取内存缓存中存在的空值缓存",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -2118,7 +2118,7 @@ func TestLayeredCache_Get(t *testing.T) {
 		{
 			name: "获取Redis缓存中存在的空值缓存",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+				cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -2141,8 +2141,8 @@ func TestLayeredCache_Get(t *testing.T) {
 			name: "获取内存与Redis都不存在，有loader，loader返回nil值",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -2166,8 +2166,8 @@ func TestLayeredCache_Get(t *testing.T) {
 			name: "获取内存与Redis都不存在，有loader，loader返回nil值，有空值缓存",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -2191,8 +2191,8 @@ func TestLayeredCache_Get(t *testing.T) {
 			name: "获取内存与Redis都不存在，有loader，自定义TTL",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -2216,7 +2216,7 @@ func TestLayeredCache_Get(t *testing.T) {
 		{
 			name: "失败 - 无效的内存TTL",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -2238,7 +2238,7 @@ func TestLayeredCache_Get(t *testing.T) {
 		{
 			name: "失败 - 无效的Redis TTL",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+				cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -2260,7 +2260,7 @@ func TestLayeredCache_Get(t *testing.T) {
 		{
 			name: "失败 - 无效的空值缓存TTL",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -2330,7 +2330,7 @@ func TestLayeredCache_Get(t *testing.T) {
 }
 
 func TestLayeredCache_Get_MemoryOnly(t *testing.T) {
-	cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+	cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -2360,7 +2360,7 @@ func TestLayeredCache_Get_MemoryOnly(t *testing.T) {
 }
 
 func TestLayeredCache_Get_RedisOnly(t *testing.T) {
-	cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+	cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -2391,8 +2391,8 @@ func TestLayeredCache_Get_RedisOnly(t *testing.T) {
 
 func TestLayeredCache_Get_BothCaches(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -2424,8 +2424,8 @@ func TestLayeredCache_Get_BothCaches(t *testing.T) {
 
 func TestLayeredCache_Get_ComplexTypes(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -2515,8 +2515,8 @@ func TestLayeredCache_Get_ComplexTypes(t *testing.T) {
 
 func TestLayeredCache_Get_WithLoader_Success(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -2558,8 +2558,8 @@ func TestLayeredCache_Get_WithLoader_Success(t *testing.T) {
 
 func TestLayeredCache_Get_WithLoader_Error(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -2606,8 +2606,8 @@ func TestLayeredCache_Get_WithLoader_NotFound(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cache, err := NewCache(
-				WithMemory(createMemoryAdapter(t)),
-				WithRedis(createRedisAdapter(t)),
+				WithConfigMemory(createMemoryAdapter(t)),
+				WithConfigRemote(createRemoteAdapter(t)),
 			)
 			if err != nil {
 				t.Fatalf("NewCache() error = %v", err)
@@ -2667,7 +2667,7 @@ func TestLayeredCache_Get_WithLoader_NotFound(t *testing.T) {
 }
 
 func TestLayeredCache_Get_ContextCancellation(t *testing.T) {
-	cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+	cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -2687,8 +2687,8 @@ func TestLayeredCache_Get_ContextCancellation(t *testing.T) {
 
 func TestLayeredCache_Get_SingleFlight(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -2753,8 +2753,8 @@ func TestLayeredCache_Get_SingleFlight(t *testing.T) {
 
 func TestLayeredCache_Get_WriteBackFromRedis(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -2808,8 +2808,8 @@ func TestLayeredCache_Get_WriteBackFromRedis(t *testing.T) {
 
 func TestLayeredCache_Get_CustomTTL(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -2884,7 +2884,7 @@ func TestLayeredCache_MGet(t *testing.T) {
 		{
 			name: "成功从内存缓存批量获取 - 字符串",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -2913,7 +2913,7 @@ func TestLayeredCache_MGet(t *testing.T) {
 		{
 			name: "成功从内存缓存批量获取 - 结构体",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -2940,7 +2940,7 @@ func TestLayeredCache_MGet(t *testing.T) {
 		{
 			name: "成功从内存缓存部分获取 - 部分键存在",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -2969,8 +2969,8 @@ func TestLayeredCache_MGet(t *testing.T) {
 			name: "成功从Redis缓存批量获取并回写内存",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -3020,8 +3020,8 @@ func TestLayeredCache_MGet(t *testing.T) {
 			name: "成功混合从内存和Redis批量获取",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -3072,8 +3072,8 @@ func TestLayeredCache_MGet(t *testing.T) {
 			name: "成功使用batchLoader批量加载",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -3110,8 +3110,8 @@ func TestLayeredCache_MGet(t *testing.T) {
 			name: "成功混合缓存和batchLoader",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -3151,7 +3151,7 @@ func TestLayeredCache_MGet(t *testing.T) {
 		{
 			name: "成功处理空键列表",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -3167,7 +3167,7 @@ func TestLayeredCache_MGet(t *testing.T) {
 		{
 			name: "成功处理全部不存在的键",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -3184,8 +3184,8 @@ func TestLayeredCache_MGet(t *testing.T) {
 			name: "成功处理batchLoader返回部分键",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -3218,8 +3218,8 @@ func TestLayeredCache_MGet(t *testing.T) {
 			name: "成功处理batchLoader返回nil值",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -3255,8 +3255,8 @@ func TestLayeredCache_MGet(t *testing.T) {
 			name: "成功处理batchLoader返回nil值并缓存空值",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -3302,7 +3302,7 @@ func TestLayeredCache_MGet(t *testing.T) {
 		{
 			name: "失败 - 无效的target类型（非指针）",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -3318,7 +3318,7 @@ func TestLayeredCache_MGet(t *testing.T) {
 		{
 			name: "失败 - 无效的target类型（非map）",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -3334,7 +3334,7 @@ func TestLayeredCache_MGet(t *testing.T) {
 		{
 			name: "失败 - 无效的target类型（map key不是string）",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -3350,7 +3350,7 @@ func TestLayeredCache_MGet(t *testing.T) {
 		{
 			name: "失败 - nil target",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -3367,8 +3367,8 @@ func TestLayeredCache_MGet(t *testing.T) {
 			name: "失败 - batchLoader返回错误",
 			setupCache: func(t *testing.T) Cache {
 				cache, err := NewCache(
-					WithMemory(createMemoryAdapter(t)),
-					WithRedis(createRedisAdapter(t)),
+					WithConfigMemory(createMemoryAdapter(t)),
+					WithConfigRemote(createRemoteAdapter(t)),
 				)
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
@@ -3390,7 +3390,7 @@ func TestLayeredCache_MGet(t *testing.T) {
 		{
 			name: "失败 - 无效的内存TTL",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -3412,7 +3412,7 @@ func TestLayeredCache_MGet(t *testing.T) {
 		{
 			name: "失败 - 无效的Redis TTL",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+				cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -3434,7 +3434,7 @@ func TestLayeredCache_MGet(t *testing.T) {
 		{
 			name: "失败 - 无效的空值缓存TTL",
 			setupCache: func(t *testing.T) Cache {
-				cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+				cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 				if err != nil {
 					t.Fatalf("NewCache() error = %v", err)
 				}
@@ -3504,7 +3504,7 @@ func TestLayeredCache_MGet(t *testing.T) {
 }
 
 func TestLayeredCache_MGet_MemoryOnly(t *testing.T) {
-	cache, err := NewCache(WithMemory(createMemoryAdapter(t)))
+	cache, err := NewCache(WithConfigMemory(createMemoryAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -3544,7 +3544,7 @@ func TestLayeredCache_MGet_MemoryOnly(t *testing.T) {
 }
 
 func TestLayeredCache_MGet_RedisOnly(t *testing.T) {
-	cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+	cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -3585,8 +3585,8 @@ func TestLayeredCache_MGet_RedisOnly(t *testing.T) {
 
 func TestLayeredCache_MGet_BothCaches(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -3628,8 +3628,8 @@ func TestLayeredCache_MGet_BothCaches(t *testing.T) {
 
 func TestLayeredCache_MGet_ComplexTypes(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -3734,8 +3734,8 @@ func TestLayeredCache_MGet_ComplexTypes(t *testing.T) {
 
 func TestLayeredCache_MGet_WithBatchLoader(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -3787,7 +3787,7 @@ func TestLayeredCache_MGet_WithBatchLoader(t *testing.T) {
 }
 
 func TestLayeredCache_MGet_ContextCancellation(t *testing.T) {
-	cache, err := NewCache(WithRedis(createRedisAdapter(t)))
+	cache, err := NewCache(WithConfigRemote(createRemoteAdapter(t)))
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
 	}
@@ -3807,8 +3807,8 @@ func TestLayeredCache_MGet_ContextCancellation(t *testing.T) {
 
 func TestLayeredCache_MGet_SingleFlight(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -3876,8 +3876,8 @@ func TestLayeredCache_MGet_SingleFlight(t *testing.T) {
 
 func TestLayeredCache_MGet_PartialHit(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
@@ -3953,8 +3953,8 @@ func TestLayeredCache_MGet_PartialHit(t *testing.T) {
 
 func TestLayeredCache_MGet_CustomTTL(t *testing.T) {
 	cache, err := NewCache(
-		WithMemory(createMemoryAdapter(t)),
-		WithRedis(createRedisAdapter(t)),
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
 	)
 	if err != nil {
 		t.Fatalf("NewCache() error = %v", err)
