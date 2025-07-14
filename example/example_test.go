@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
@@ -131,8 +132,14 @@ func Example_batch_operations() {
 		return
 	}
 
+	var result []string
 	for key, user := range retrievedUsers {
-		fmt.Printf("%s: %+v\n", key, user)
+		result = append(result, fmt.Sprintf("%s: %+v\n", key, user))
+	}
+
+	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
+	for _, v := range result {
+		fmt.Print(v)
 	}
 	// Output:
 	// user:1: {ID:1 Name:Alice}
