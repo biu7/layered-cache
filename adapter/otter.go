@@ -1,15 +1,13 @@
 package adapter
 
 import (
-	"context"
 	"fmt"
 	"time"
 
-	"github.com/biu7/layered-cache/errors"
 	"github.com/maypok86/otter"
 )
 
-var _ Adapter = (*OtterAdapter)(nil)
+var _ MemoryAdapter = (*OtterAdapter)(nil)
 
 type OtterAdapter struct {
 	client *otter.CacheWithVariableTTL[string, []byte]
@@ -42,36 +40,37 @@ func NewOtterAdapterWithClient(client *otter.CacheWithVariableTTL[string, []byte
 	}, nil
 }
 
-func (o *OtterAdapter) Set(ctx context.Context, key string, value []byte, expire time.Duration) error {
-	if expire < time.Second {
-		return fmt.Errorf("otter set %s: %w", key, errors.ErrInvalidMemoryExpireTime)
+func (o *OtterAdapter) Set(key string, value []byte, expire time.Duration) int32 {
+	if expire < 0 {
+		expire = 0
 	}
-	success := o.client.Set(key, value, expire)
-	if !success {
-		return fmt.Errorf("otter set dropped: %s", key)
+	var count int32
+	ok := o.client.Set(key, value, expire)
+	if ok {
+		count++
 	}
-	return nil
+	return count
 }
 
-func (o *OtterAdapter) MSet(ctx context.Context, values map[string][]byte, expire time.Duration) error {
-	if expire < time.Second {
-		return fmt.Errorf("otter mset: %w", errors.ErrInvalidMemoryExpireTime)
+func (o *OtterAdapter) MSet(values map[string][]byte, expire time.Duration) int32 {
+	if expire < 0 {
+		expire = 0
 	}
+	var count int32
 	for key, value := range values {
-		_ = o.client.Set(key, value, expire)
+		ok := o.client.Set(key, value, expire)
+		if ok {
+			count++
+		}
 	}
-	return nil
+	return count
 }
 
-func (o *OtterAdapter) Get(ctx context.Context, key string) ([]byte, error) {
-	val, success := o.client.Get(key)
-	if !success {
-		return nil, errors.ErrNotFound
-	}
-	return val, nil
+func (o *OtterAdapter) Get(key string) ([]byte, bool) {
+	return o.client.Get(key)
 }
 
-func (o *OtterAdapter) MGet(ctx context.Context, keys []string) (map[string][]byte, error) {
+func (o *OtterAdapter) MGet(keys []string) map[string][]byte {
 	ret := make(map[string][]byte)
 	for _, key := range keys {
 		val, success := o.client.Get(key)
@@ -80,10 +79,9 @@ func (o *OtterAdapter) MGet(ctx context.Context, keys []string) (map[string][]by
 		}
 		ret[key] = val
 	}
-	return ret, nil
+	return ret
 }
 
-func (o *OtterAdapter) Delete(ctx context.Context, key string) error {
+func (o *OtterAdapter) Delete(key string) {
 	o.client.Delete(key)
-	return nil
 }
