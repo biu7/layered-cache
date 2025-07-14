@@ -14,10 +14,10 @@ type Option interface {
 // options 缓存配置
 type options struct {
 	// MemoryAdapter 内存缓存适配器
-	memoryAdapter adapter.Adapter
+	memoryAdapter adapter.MemoryAdapter
 
-	// redisAdapter Redis缓存适配器
-	redisAdapter adapter.Adapter
+	// redisAdapter Redis 缓存适配器
+	redisAdapter adapter.RemoteAdapter
 
 	// serializer 序列化器
 	serializer serializer.Serializer
@@ -36,26 +36,26 @@ type options struct {
 }
 
 type memoryAdapterOption struct {
-	adapter adapter.Adapter
+	adapter adapter.MemoryAdapter
 }
 
 func (m memoryAdapterOption) apply(opts *options) {
 	opts.memoryAdapter = m.adapter
 }
 
-func WithMemory(adp adapter.Adapter) Option {
+func WithMemory(adp adapter.MemoryAdapter) Option {
 	return memoryAdapterOption{adapter: adp}
 }
 
 type redisAdapterOption struct {
-	adapter adapter.Adapter
+	adapter adapter.RemoteAdapter
 }
 
 func (r redisAdapterOption) apply(opts *options) {
 	opts.redisAdapter = r.adapter
 }
 
-func WithRedis(adp adapter.Adapter) Option {
+func WithRedis(adp adapter.RemoteAdapter) Option {
 	return redisAdapterOption{adapter: adp}
 }
 
