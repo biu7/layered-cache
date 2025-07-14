@@ -39,8 +39,8 @@ type LayeredCache struct {
 	defaultRedisTTL  time.Duration
 
 	// 默认缺失值缓存设置
-	defaultCacheMissing bool
-	defaultMissingTTL   time.Duration
+	defaultCacheNotFound    bool
+	defaultCacheNotFoundTTL time.Duration
 
 	// singleflight，防止并发请求重复调用 loader
 	sf singleflight.Group
@@ -50,28 +50,8 @@ type LayeredCache struct {
 func NewCache(opts ...Option) (Cache, error) {
 	config := newOptions()
 
-	applyOptions(config, opts...)
-
-	if config.memoryAdapter == nil && config.redisAdapter == nil {
-		return nil, errors.ErrAdapterRequired
-	}
-
-	if config.memoryAdapter != nil {
-		if err := validMemoryTTL(config.defaultMemoryTTL); err != nil {
-			return nil, err
-		}
-	}
-
-	if config.redisAdapter != nil {
-		if err := validRedisTTL(config.defaultRedisTTL); err != nil {
-			return nil, err
-		}
-	}
-
-	if config.defaultCacheMissing {
-		if err := validCacheMissTTL(config.defaultMissingTTL); err != nil {
-			return nil, err
-		}
+	if err := applyOptions(config, opts...); err != nil {
+		return nil, err
 	}
 
 	cache := &LayeredCache{
@@ -82,8 +62,8 @@ func NewCache(opts ...Option) (Cache, error) {
 		defaultMemoryTTL: config.defaultMemoryTTL,
 		defaultRedisTTL:  config.defaultRedisTTL,
 
-		defaultCacheMissing: config.defaultCacheMissing,
-		defaultMissingTTL:   config.defaultMissingTTL,
+		defaultCacheNotFound:    config.defaultCacheNotFound,
+		defaultCacheNotFoundTTL: config.defaultCacheNotFoundTTL,
 	}
 
 	return cache, nil
@@ -92,7 +72,9 @@ func NewCache(opts ...Option) (Cache, error) {
 // Set 设置缓存
 func (c *LayeredCache) Set(ctx context.Context, key string, value any, opts ...SetOption) error {
 	config := newSetOptions()
-	applySetOptions(config, opts...)
+	if err := applySetOptions(config, opts...); err != nil {
+		return err
+	}
 
 	data, err := c.Marshal(value)
 	if err != nil {
@@ -124,7 +106,9 @@ func (c *LayeredCache) Set(ctx context.Context, key string, value any, opts ...S
 // MSet 批量设置缓存
 func (c *LayeredCache) MSet(ctx context.Context, keyValues map[string]any, opts ...SetOption) error {
 	config := newSetOptions()
-	applySetOptions(config, opts...)
+	if err := applySetOptions(config, opts...); err != nil {
+		return err
+	}
 
 	memoryTTL, redisTTL := c.calculateSetTTL(config)
 
@@ -178,7 +162,9 @@ func (c *LayeredCache) Delete(ctx context.Context, key string) error {
 func (c *LayeredCache) Get(ctx context.Context, key string, target any, opts ...GetOption) error {
 	// 解析Get选项
 	config := newGetOptions()
-	applyGetOptions(config, opts...)
+	if err := applyGetOptions(config, opts...); err != nil {
+		return err
+	}
 
 	if c.memory != nil {
 		if data, exists := c.memory.Get(key); exists {
@@ -236,8 +222,8 @@ func (c *LayeredCache) loadAndCache(ctx context.Context, key string, config *get
 	}
 
 	// 判断是否应该缓存缺失值
-	shouldCacheMissing := c.shouldCacheMissing(config.cacheMissing)
-	if isNotFound && !shouldCacheMissing {
+	cacheNotFound := c.shouldCacheNotFound(config.cacheNotFound)
+	if isNotFound && !cacheNotFound {
 		return nil, errors.ErrNotFound
 	}
 
@@ -248,7 +234,7 @@ func (c *LayeredCache) loadAndCache(ctx context.Context, key string, config *get
 	}
 
 	// 计算TTL
-	memoryTTL, redisTTL := c.calculateLoaderTTL(config, isNotFound && shouldCacheMissing)
+	memoryTTL, redisTTL := c.calculateLoaderTTL(config, isNotFound && cacheNotFound)
 
 	if c.memory != nil {
 		if err = validMemoryTTL(memoryTTL); err != nil {
@@ -280,7 +266,9 @@ func (c *LayeredCache) loadAndCache(ctx context.Context, key string, config *get
 func (c *LayeredCache) MGet(ctx context.Context, keys []string, target any, opts ...GetOption) error {
 	// 解析Get选项
 	config := newGetOptions()
-	applyGetOptions(config, opts...)
+	if err := applyGetOptions(config, opts...); err != nil {
+		return err
+	}
 
 	if len(keys) == 0 {
 		return nil
@@ -468,6 +456,8 @@ func (c *LayeredCache) batchLoadAndCache(ctx context.Context, keys []string, con
 	result := make(map[string][]byte)      // 正常值
 	missingData := make(map[string][]byte) // 缺失值
 
+	cacheNotFound := c.shouldCacheNotFound(config.cacheNotFound)
+
 	// 处理每个键值对
 	for _, key := range keys {
 		value, exists := values[key]
@@ -476,8 +466,7 @@ func (c *LayeredCache) batchLoadAndCache(ctx context.Context, keys []string, con
 		isNotFound := !exists || value == nil
 
 		// 判断是否应该缓存缺失值
-		shouldCacheMissing := c.shouldCacheMissing(config.cacheMissing)
-		if isNotFound && !shouldCacheMissing {
+		if isNotFound && !cacheNotFound {
 			continue
 		}
 
@@ -547,25 +536,23 @@ func (c *LayeredCache) batchLoadAndCache(ctx context.Context, keys []string, con
 }
 
 // calculateLoaderTTL 计算内存和Redis缓存的TTL
-func (c *LayeredCache) calculateLoaderTTL(config *getOptions, isMissing bool) (memoryTTL, redisTTL time.Duration) {
-	if isMissing {
-		// 缺失值使用较短的TTL
-		missingTTL := config.missingTTL
-		if missingTTL <= 0 {
-			missingTTL = c.defaultMissingTTL
+func (c *LayeredCache) calculateLoaderTTL(config *getOptions, isNotFound bool) (memoryTTL, redisTTL time.Duration) {
+	if isNotFound {
+		cacheNotFoundTTL := c.defaultCacheNotFoundTTL
+		if config.cacheNotFoundTTL != nil {
+			cacheNotFoundTTL = *config.cacheNotFoundTTL
 		}
-		return missingTTL, missingTTL
+		return cacheNotFoundTTL, cacheNotFoundTTL
 	}
 
-	// 正常值使用配置的TTL
-	memoryTTL = config.memoryTTL
-	if memoryTTL <= 0 {
-		memoryTTL = c.defaultMemoryTTL
+	memoryTTL = c.defaultMemoryTTL
+	if config.memoryTTL != nil {
+		memoryTTL = *config.memoryTTL
 	}
 
-	redisTTL = config.redisTTL
-	if redisTTL <= 0 {
-		redisTTL = c.defaultRedisTTL
+	redisTTL = c.defaultRedisTTL
+	if config.redisTTL != nil {
+		redisTTL = *config.redisTTL
 	}
 
 	return memoryTTL, redisTTL
@@ -573,25 +560,25 @@ func (c *LayeredCache) calculateLoaderTTL(config *getOptions, isMissing bool) (m
 
 // calculateSetTTL 计算Set操作的TTL
 func (c *LayeredCache) calculateSetTTL(config *setOptions) (memoryTTL, redisTTL time.Duration) {
-	memoryTTL = config.memoryTTL
-	if memoryTTL <= 0 {
-		memoryTTL = c.defaultMemoryTTL
+	memoryTTL = c.defaultMemoryTTL
+	if config.memoryTTL != nil {
+		memoryTTL = *config.memoryTTL
 	}
 
-	redisTTL = config.redisTTL
-	if redisTTL <= 0 {
-		redisTTL = c.defaultRedisTTL
+	redisTTL = c.defaultRedisTTL
+	if config.redisTTL != nil {
+		redisTTL = *config.redisTTL
 	}
 
 	return memoryTTL, redisTTL
 }
 
-// shouldCacheMissing 判断是否应该缓存缺失值
-func (c *LayeredCache) shouldCacheMissing(operationCacheMissing *bool) bool {
-	if operationCacheMissing != nil {
-		return *operationCacheMissing
+// shouldCacheNotFound 判断是否应该缓存缺失值
+func (c *LayeredCache) shouldCacheNotFound(optCacheNotFound *bool) bool {
+	if optCacheNotFound != nil {
+		return *optCacheNotFound
 	}
-	return c.defaultCacheMissing
+	return c.defaultCacheNotFound
 }
 
 func (c *LayeredCache) Marshal(val any) ([]byte, error) {
@@ -644,7 +631,7 @@ func validRedisTTL(redisTTL time.Duration) error {
 
 func validCacheMissTTL(cacheMissTTL time.Duration) error {
 	if cacheMissTTL <= 0 {
-		return errors.ErrInvalidCacheMissTTL
+		return errors.ErrInvalidCacheNotFondTTL
 	}
 	return nil
 }
