@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/biu7/layered-cache/adapter"
+	"github.com/biu7/layered-cache/errors"
 	"github.com/biu7/layered-cache/serializer"
 )
 
@@ -28,11 +29,11 @@ type options struct {
 	// defaultRedisTTL 默认Redis缓存过期时间
 	defaultRedisTTL time.Duration
 
-	// defaultCacheMissing 默认是否缓存缺失值（防止缓存穿透）
-	defaultCacheMissing bool
+	// defaultCacheNotFound 默认是否缓存缺失值（防止缓存穿透）
+	defaultCacheNotFound bool
 
-	// defaultMissingTTL 默认缺失值的缓存过期时间
-	defaultMissingTTL time.Duration
+	// defaultCacheNotFoundTTL 默认缺失值的缓存过期时间
+	defaultCacheNotFoundTTL time.Duration
 }
 
 type memoryAdapterOption struct {
@@ -85,36 +86,63 @@ func WithDefaultTTL(memoryTTL, redisTTL time.Duration) Option {
 	return defaultTTLOption{memoryTTL: memoryTTL, redisTTL: redisTTL}
 }
 
-// withDefaultCacheMissing 设置默认缺失值缓存选项
-type withDefaultCacheMissing struct {
-	cacheMissing bool
-	missingTTL   time.Duration
+// withDefaultCacheNotFound 设置默认缺失值缓存选项
+type withDefaultCacheNotFound struct {
+	cacheNotFound    bool
+	cacheNotFoundTTL time.Duration
 }
 
-func (w withDefaultCacheMissing) apply(opts *options) {
-	opts.defaultCacheMissing = w.cacheMissing
-	opts.defaultMissingTTL = w.missingTTL
+func (w withDefaultCacheNotFound) apply(opts *options) {
+	opts.defaultCacheNotFound = w.cacheNotFound
+	opts.defaultCacheNotFoundTTL = w.cacheNotFoundTTL
 }
 
-// WithDefaultCacheMissing 设置默认缺失值缓存选项
-func WithDefaultCacheMissing(cacheMissing bool, missingTTL time.Duration) Option {
-	return withDefaultCacheMissing{cacheMissing: cacheMissing, missingTTL: missingTTL}
+// WithDefaultCacheNotFound 设置默认缺失值缓存选项
+func WithDefaultCacheNotFound(cacheNotFound bool, cacheNotFoundTTL time.Duration) Option {
+	return withDefaultCacheNotFound{cacheNotFound: cacheNotFound, cacheNotFoundTTL: cacheNotFoundTTL}
 }
 
 // applyOptions 应用选项到配置
-func applyOptions(opts *options, options ...Option) {
+func applyOptions(opts *options, options ...Option) error {
 	for _, option := range options {
 		option.apply(opts)
 	}
+	return validateOptions(opts)
 }
 
 // newOptions 创建默认配置
 func newOptions() *options {
 	return &options{
-		serializer:          serializer.NewSonicJson(), // 默认使用SonicJson序列化
-		defaultMemoryTTL:    5 * time.Minute,           // 默认内存缓存5分钟
-		defaultRedisTTL:     14 * 24 * time.Hour,       // 默认Redis缓存14天
-		defaultCacheMissing: false,                     // 默认不缓存缺失值
-		defaultMissingTTL:   time.Minute,               // 默认缺失值缓存1分钟
+		serializer:              serializer.NewSonicJson(), // 默认使用SonicJson序列化
+		defaultMemoryTTL:        5 * time.Minute,           // 默认内存缓存5分钟
+		defaultRedisTTL:         14 * 24 * time.Hour,       // 默认Redis缓存14天
+		defaultCacheNotFound:    false,                     // 默认不缓存缺失值
+		defaultCacheNotFoundTTL: time.Minute,               // 默认缺失值缓存1分钟
 	}
+}
+
+func validateOptions(cfg *options) error {
+	if cfg.memoryAdapter == nil && cfg.redisAdapter == nil {
+		return errors.ErrAdapterRequired
+	}
+
+	if cfg.memoryAdapter != nil {
+		if err := validMemoryTTL(cfg.defaultMemoryTTL); err != nil {
+			return err
+		}
+	}
+
+	if cfg.redisAdapter != nil {
+		if err := validRedisTTL(cfg.defaultRedisTTL); err != nil {
+			return err
+		}
+	}
+
+	if cfg.defaultCacheNotFound {
+		if err := validCacheMissTTL(cfg.defaultCacheNotFoundTTL); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
