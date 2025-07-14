@@ -9,7 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-var _ Adapter = (*RedisAdapter)(nil)
+var _ RemoteAdapter = (*RedisAdapter)(nil)
 
 type RedisAdapter struct {
 	client redis.Cmdable
