@@ -3,7 +3,8 @@ package errors
 import "errors"
 
 var (
-	Is = errors.Is
+	Is  = errors.Is
+	New = errors.New
 )
 
 var (

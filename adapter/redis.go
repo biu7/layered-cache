@@ -85,3 +85,11 @@ func (r *RedisAdapter) Delete(ctx context.Context, key string) error {
 	}
 	return nil
 }
+
+func (r *RedisAdapter) TTL(ctx context.Context, key string) (time.Duration, error) {
+	ttl, err := r.client.TTL(ctx, key).Result()
+	if err != nil {
+		return 0, fmt.Errorf("redis ttl %s: %w", key, err)
+	}
+	return ttl, nil
+}
