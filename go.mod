@@ -1,8 +1,6 @@
 module github.com/biu7/layered-cache
 
-go 1.23.0
-
-toolchain go1.23.11
+go 1.22
 
 require (
 	github.com/alicebob/miniredis/v2 v2.35.0
@@ -11,6 +9,7 @@ require (
 	github.com/maypok86/otter v1.2.4
 	github.com/redis/go-redis/v9 v9.11.0
 	github.com/vmihailenco/msgpack/v5 v5.4.1
+	golang.org/x/sync v0.11.0
 )
 
 require (
@@ -25,5 +24,4 @@ require (
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670 // indirect
-	golang.org/x/sync v0.16.0 // indirect
 )
