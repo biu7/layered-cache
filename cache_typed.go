@@ -1,6 +1,8 @@
-package main
+package cache
 
-import "context"
+import (
+	"context"
+)
 
 type TypedCache[T any] struct {
 	cache Cache
@@ -10,17 +12,38 @@ func Typed[T any](cache Cache) *TypedCache[T] {
 	return &TypedCache[T]{cache: cache}
 }
 
-func (c *TypedCache[T]) Get(ctx context.Context, key string, opts ...GetOption) (*T, error) {
+type TypedLoaderFunc[T any] func(ctx context.Context, key string) (T, error)
+
+type TypedBatchLoaderFunc[T any] func(ctx context.Context, keys []string) (map[string]T, error)
+
+func (c *TypedCache[T]) Get(ctx context.Context, key string, loader TypedLoaderFunc[T], opts ...GetOption) (T, error) {
+	if loader != nil {
+		opts = append(opts, WithLoader(func(ctx context.Context, key string) (any, error) {
+			return loader(ctx, key)
+		}))
+	}
+
 	var result T
 	err := c.cache.Get(ctx, key, &result, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return result, err
 }
 
-func (c *TypedCache[T]) MGet(ctx context.Context, keys []string, opts ...GetOption) (map[string]T, error) {
-	var result map[string]T
+func (c *TypedCache[T]) MGet(ctx context.Context, keys []string, loader TypedBatchLoaderFunc[T], opts ...GetOption) (map[string]T, error) {
+	if loader != nil {
+		opts = append(opts, WithBatchLoader(func(ctx context.Context, keys []string) (map[string]any, error) {
+			values, err := loader(ctx, keys)
+			if err != nil {
+				return nil, err
+			}
+			result := make(map[string]any, len(keys))
+			for k, v := range values {
+				result[k] = v
+			}
+			return result, nil
+		}))
+	}
+
+	var result = make(map[string]T)
 	err := c.cache.MGet(ctx, keys, &result, opts...)
 	return result, err
 }

@@ -1,4 +1,4 @@
-package main
+package cache
 
 import (
 	"bytes"
@@ -14,6 +14,7 @@ import (
 
 var (
 	notFoundPlaceholder = []byte("__CACHE_NOT_FOUND__")
+	ErrNotFound         = errors.ErrNotFound
 )
 
 type Cache interface {
@@ -214,7 +215,7 @@ func (c *LayeredCache) loadAndCache(ctx context.Context, key string, config *get
 	}
 
 	// 序列化并存储到缓存
-	data, err := c.serializer.Marshal(value)
+	data, err := c.Marshal(value)
 	if err != nil {
 		return nil, err
 	}
@@ -341,24 +342,24 @@ func (c *LayeredCache) MGet(ctx context.Context, keys []string, target any, opts
 // validateMGetTarget 验证 MGet 的 target 参数类型
 func (c *LayeredCache) validateMGetTarget(target any) error {
 	if target == nil {
-		return errors.ErrInvalidTarget
+		return errors.ErrInvalidMGetTarget
 	}
 
 	// 检查是否为指针
 	targetValue := reflect.ValueOf(target)
 	if targetValue.Kind() != reflect.Ptr {
-		return errors.ErrInvalidTarget
+		return errors.ErrInvalidMGetTarget
 	}
 
 	// 检查指针指向的是否为 map
 	elemType := targetValue.Elem().Type()
 	if elemType.Kind() != reflect.Map {
-		return errors.ErrInvalidTarget
+		return errors.ErrInvalidMGetTarget
 	}
 
 	// 检查 map 的 key 类型是否为 string
 	if elemType.Key().Kind() != reflect.String {
-		return errors.ErrInvalidTarget
+		return errors.ErrInvalidMGetTarget
 	}
 
 	return nil
@@ -579,6 +580,9 @@ func (c *LayeredCache) Unmarshal(b []byte, val any) error {
 }
 
 func IsNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
 	return errors.Is(err, errors.ErrNotFound)
 }
 

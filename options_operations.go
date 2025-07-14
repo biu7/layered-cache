@@ -1,4 +1,4 @@
-package main
+package cache
 
 import (
 	"context"
@@ -89,6 +89,46 @@ func WithTTL(memoryTTL, redisTTL time.Duration) interface {
 	SetOption
 } {
 	return withTTL{memoryTTL: memoryTTL, redisTTL: redisTTL}
+}
+
+type withMemoryTTL struct {
+	memoryTTL time.Duration
+}
+
+func (w withMemoryTTL) applyGet(cfg *getOptions) {
+	cfg.memoryTTL = &w.memoryTTL
+}
+
+func (w withMemoryTTL) applySet(cfg *setOptions) {
+	cfg.memoryTTL = &w.memoryTTL
+}
+
+// WithMemoryTTL 设置缓存过期时间（通用选项，可用于Get和Set操作）
+func WithMemoryTTL(memoryTTL time.Duration) interface {
+	GetOption
+	SetOption
+} {
+	return withMemoryTTL{memoryTTL: memoryTTL}
+}
+
+type withRedisTTL struct {
+	redisTTL time.Duration
+}
+
+func (w withRedisTTL) applyGet(cfg *getOptions) {
+	cfg.redisTTL = &w.redisTTL
+}
+
+func (w withRedisTTL) applySet(cfg *setOptions) {
+	cfg.redisTTL = &w.redisTTL
+}
+
+// WithRedisTTL 设置缓存过期时间（通用选项，可用于Get和Set操作）
+func WithRedisTTL(redisTTL time.Duration) interface {
+	GetOption
+	SetOption
+} {
+	return withRedisTTL{redisTTL: redisTTL}
 }
 
 // withCacheNotFound 设置是否缓存缺失值

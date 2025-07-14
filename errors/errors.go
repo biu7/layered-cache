@@ -17,6 +17,6 @@ var (
 	ErrInvalidRedisExpireTime  = errors.New("invalid redis expire time")
 	ErrInvalidCacheNotFondTTL  = errors.New("invalid cache not found ttl")
 
-	// ErrInvalidTarget 无效的目标类型
-	ErrInvalidTarget = errors.New("invalid target type, must be a pointer to map[string]T")
+	// ErrInvalidMGetTarget 无效的目标类型
+	ErrInvalidMGetTarget = errors.New("invalid target type, must be a pointer to map[string]T")
 )
