@@ -84,17 +84,10 @@ func (c *LayeredCache) Set(ctx context.Context, key string, value any, opts ...S
 	memoryTTL, redisTTL := c.calculateSetTTL(config)
 
 	if c.memory != nil {
-		if err = validMemoryTTL(memoryTTL); err != nil {
-			return err
-		}
-
 		c.memory.Set(key, data, memoryTTL)
 	}
 
 	if c.remote != nil {
-		if err = validRedisTTL(redisTTL); err != nil {
-			return err
-		}
 		if err = c.remote.Set(ctx, key, data, redisTTL); err != nil {
 			return err
 		}
@@ -123,18 +116,11 @@ func (c *LayeredCache) MSet(ctx context.Context, keyValues map[string]any, opts 
 
 	// 设置到内存缓存
 	if c.memory != nil {
-		if err := validMemoryTTL(memoryTTL); err != nil {
-			return err
-		}
-
 		c.memory.MSet(serializedData, memoryTTL)
 	}
 
 	// 设置到Redis缓存
 	if c.remote != nil {
-		if err := validRedisTTL(redisTTL); err != nil {
-			return err
-		}
 		if err := c.remote.MSet(ctx, serializedData, redisTTL); err != nil {
 			return err
 		}
@@ -237,18 +223,11 @@ func (c *LayeredCache) loadAndCache(ctx context.Context, key string, config *get
 	memoryTTL, redisTTL := c.calculateLoaderTTL(config, isNotFound && cacheNotFound)
 
 	if c.memory != nil {
-		if err = validMemoryTTL(memoryTTL); err != nil {
-			return nil, err
-		}
 		c.memory.Set(key, data, memoryTTL)
 	}
 
 	// 设置到Redis缓存
 	if c.remote != nil {
-		// 校验TTL
-		if err = validRedisTTL(redisTTL); err != nil {
-			return nil, err
-		}
 		if err = c.remote.Set(ctx, key, data, redisTTL); err != nil {
 			return nil, err
 		}
@@ -491,17 +470,11 @@ func (c *LayeredCache) batchLoadAndCache(ctx context.Context, keys []string, con
 
 		// 设置到内存缓存
 		if c.memory != nil {
-			if err = validMemoryTTL(memoryTTL); err != nil {
-				return nil, err
-			}
 			c.memory.MSet(result, memoryTTL)
 		}
 
 		// 设置到Redis缓存
 		if c.remote != nil {
-			if err = validRedisTTL(redisTTL); err != nil {
-				return nil, err
-			}
 			if err = c.remote.MSet(ctx, result, redisTTL); err != nil {
 				return nil, err
 			}
@@ -515,17 +488,11 @@ func (c *LayeredCache) batchLoadAndCache(ctx context.Context, keys []string, con
 
 		// 设置到内存缓存
 		if c.memory != nil {
-			if err = validMemoryTTL(memoryTTL); err != nil {
-				return nil, err
-			}
 			c.memory.MSet(missingData, memoryTTL)
 		}
 
 		// 设置到Redis缓存
 		if c.remote != nil {
-			if err = validRedisTTL(redisTTL); err != nil {
-				return nil, err
-			}
 			if err = c.remote.MSet(ctx, missingData, redisTTL); err != nil {
 				return nil, err
 			}

@@ -13,6 +13,9 @@ type RemoteAdapter interface {
 	MGet(ctx context.Context, keys []string) (map[string][]byte, error)
 
 	Delete(ctx context.Context, key string) error
+
+	// TTL 仅用于单元测试
+	TTL(ctx context.Context, key string) (time.Duration, error)
 }
 
 type MemoryAdapter interface {
