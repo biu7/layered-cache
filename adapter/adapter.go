@@ -6,11 +6,11 @@ import (
 )
 
 type Adapter interface {
-	Set(ctx context.Context, key string, value string, expire time.Duration) error
-	MSet(ctx context.Context, values map[string]string, expire time.Duration) error
+	Set(ctx context.Context, key string, value []byte, expire time.Duration) error
+	MSet(ctx context.Context, values map[string][]byte, expire time.Duration) error
 
-	Get(ctx context.Context, key string) (string, error)
-	MGet(ctx context.Context, keys []string) (map[string]string, error)
+	Get(ctx context.Context, key string) ([]byte, error)
+	MGet(ctx context.Context, keys []string) (map[string][]byte, error)
 
 	Delete(ctx context.Context, key string) error
 }

@@ -12,16 +12,16 @@ import (
 var _ Adapter = (*OtterAdapter)(nil)
 
 type OtterAdapter struct {
-	client *otter.CacheWithVariableTTL[string, string]
+	client *otter.CacheWithVariableTTL[string, []byte]
 }
 
 func NewOtterAdapter(maxMemory int) (*OtterAdapter, error) {
 	if maxMemory <= 0 {
 		return nil, fmt.Errorf("otter create: invalid maxMemory: %d", maxMemory)
 	}
-	cache, err := otter.MustBuilder[string, string](maxMemory).
+	cache, err := otter.MustBuilder[string, []byte](maxMemory).
 		WithVariableTTL().
-		Cost(func(key string, value string) uint32 {
+		Cost(func(key string, value []byte) uint32 {
 			return uint32(len(key) + len(value))
 		}).
 		Build()
@@ -33,7 +33,7 @@ func NewOtterAdapter(maxMemory int) (*OtterAdapter, error) {
 	}, nil
 }
 
-func NewOtterAdapterWithClient(client *otter.CacheWithVariableTTL[string, string]) (*OtterAdapter, error) {
+func NewOtterAdapterWithClient(client *otter.CacheWithVariableTTL[string, []byte]) (*OtterAdapter, error) {
 	if client == nil {
 		return nil, fmt.Errorf("otter create: cache is nil")
 	}
@@ -42,9 +42,9 @@ func NewOtterAdapterWithClient(client *otter.CacheWithVariableTTL[string, string
 	}, nil
 }
 
-func (o *OtterAdapter) Set(ctx context.Context, key string, value string, expire time.Duration) error {
+func (o *OtterAdapter) Set(ctx context.Context, key string, value []byte, expire time.Duration) error {
 	if expire < time.Second {
-		return fmt.Errorf("otter set %s: %w", key, errors.ErrInvalidExpireTime)
+		return fmt.Errorf("otter set %s: %w", key, errors.ErrInvalidMemoryExpireTime)
 	}
 	success := o.client.Set(key, value, expire)
 	if !success {
@@ -53,9 +53,9 @@ func (o *OtterAdapter) Set(ctx context.Context, key string, value string, expire
 	return nil
 }
 
-func (o *OtterAdapter) MSet(ctx context.Context, values map[string]string, expire time.Duration) error {
+func (o *OtterAdapter) MSet(ctx context.Context, values map[string][]byte, expire time.Duration) error {
 	if expire < time.Second {
-		return fmt.Errorf("otter mset: %w", errors.ErrInvalidExpireTime)
+		return fmt.Errorf("otter mset: %w", errors.ErrInvalidMemoryExpireTime)
 	}
 	for key, value := range values {
 		_ = o.client.Set(key, value, expire)
@@ -63,16 +63,16 @@ func (o *OtterAdapter) MSet(ctx context.Context, values map[string]string, expir
 	return nil
 }
 
-func (o *OtterAdapter) Get(ctx context.Context, key string) (string, error) {
+func (o *OtterAdapter) Get(ctx context.Context, key string) ([]byte, error) {
 	val, success := o.client.Get(key)
 	if !success {
-		return "", errors.ErrNotFound
+		return nil, errors.ErrNotFound
 	}
 	return val, nil
 }
 
-func (o *OtterAdapter) MGet(ctx context.Context, keys []string) (map[string]string, error) {
-	ret := make(map[string]string)
+func (o *OtterAdapter) MGet(ctx context.Context, keys []string) (map[string][]byte, error) {
+	ret := make(map[string][]byte)
 	for _, key := range keys {
 		val, success := o.client.Get(key)
 		if !success {
