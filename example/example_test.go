@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	cache "github.com/biu7/layered-cache"
+	"github.com/biu7/layered-cache"
 	"github.com/biu7/layered-cache/storage"
 	"github.com/redis/go-redis/v9"
 )
@@ -52,20 +52,20 @@ func Example_basic_usage() {
 		log.Fatalf("Failed to create cache: %v", err)
 	}
 
-	// 使用泛型包装器
-	userCache := cache.Typed[User](c)
+	// 使用泛型包装器 - 使用int64作为ID类型，User作为值类型
+	userCache := cache.Typed[int64, User](c)
 
 	ctx := context.Background()
 	user := User{ID: 1, Name: "Alice"}
 
-	// 设置缓存
-	if err := userCache.Set(ctx, "user:1", user); err != nil {
+	// 设置缓存 - 使用keyPrefix和ID
+	if err := userCache.Set(ctx, "user", user.ID, user); err != nil {
 		log.Printf("Failed to set cache: %v", err)
 		return
 	}
 
 	// 获取缓存
-	retrievedUser, err := userCache.Get(ctx, "user:1", nil)
+	retrievedUser, err := userCache.Get(ctx, "user", user.ID, nil)
 	if err != nil {
 		log.Printf("Failed to get cache: %v", err)
 		return
@@ -80,21 +80,21 @@ func Example_with_loader() {
 	// 创建缓存（简化配置）
 	memory, _ := storage.NewOtter(1000)
 	c, _ := cache.NewCache(cache.WithConfigMemory(memory))
-	userCache := cache.Typed[User](c)
+	userCache := cache.Typed[int64, User](c)
 
 	ctx := context.Background()
 
-	// 定义数据加载器
-	loader := func(ctx context.Context, key string) (User, error) {
+	// 定义数据加载器 - 新的loader签名接收ID而不是key
+	loader := func(ctx context.Context, id int64) (User, error) {
 		// 模拟从数据库加载数据
-		if key == "user:2" {
+		if id == 2 {
 			return User{ID: 2, Name: "Bob"}, nil
 		}
 		return User{}, cache.ErrNotFound
 	}
 
 	// 获取缓存，如果不存在则通过 loader 加载
-	user, err := userCache.Get(ctx, "user:2", loader)
+	user, err := userCache.Get(ctx, "user", 2, loader)
 	if err != nil {
 		log.Printf("Failed to get user: %v", err)
 		return
@@ -108,33 +108,33 @@ func Example_with_loader() {
 func Example_batch_operations() {
 	memory, _ := storage.NewOtter(1000)
 	c, _ := cache.NewCache(cache.WithConfigMemory(memory))
-	userCache := cache.Typed[User](c)
+	userCache := cache.Typed[int64, User](c)
 
 	ctx := context.Background()
 
-	// 批量设置
-	users := map[string]User{
-		"user:1": {ID: 1, Name: "Alice"},
-		"user:2": {ID: 2, Name: "Bob"},
-		"user:3": {ID: 3, Name: "Charlie"},
+	// 批量设置 - 使用ID作为key
+	users := map[int64]User{
+		1: {ID: 1, Name: "Alice"},
+		2: {ID: 2, Name: "Bob"},
+		3: {ID: 3, Name: "Charlie"},
 	}
 
-	if err := userCache.MSet(ctx, users); err != nil {
+	if err := userCache.MSet(ctx, "user", users); err != nil {
 		log.Printf("Failed to batch set: %v", err)
 		return
 	}
 
 	// 批量获取
-	keys := []string{"user:1", "user:2", "user:3"}
-	retrievedUsers, err := userCache.MGet(ctx, keys, nil)
+	ids := []int64{1, 2, 3}
+	retrievedUsers, err := userCache.MGet(ctx, "user", ids, nil)
 	if err != nil {
 		log.Printf("Failed to batch get: %v", err)
 		return
 	}
 
 	var result []string
-	for key, user := range retrievedUsers {
-		result = append(result, fmt.Sprintf("%s: %+v\n", key, user))
+	for id, user := range retrievedUsers {
+		result = append(result, fmt.Sprintf("user:%d: %+v\n", id, user))
 	}
 
 	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
@@ -151,13 +151,13 @@ func Example_batch_operations() {
 func Example_custom_ttl() {
 	memory, _ := storage.NewOtter(1000)
 	c, _ := cache.NewCache(cache.WithConfigMemory(memory))
-	userCache := cache.Typed[User](c)
+	userCache := cache.Typed[int64, User](c)
 
 	ctx := context.Background()
 	user := User{ID: 1, Name: "Alice"}
 
 	// 设置自定义过期时间
-	err := userCache.Set(ctx, "user:1", user,
+	err := userCache.Set(ctx, "user", user.ID, user,
 		cache.WithTTL(5*time.Minute, 30*time.Minute), // 内存5分钟，Redis 30分钟
 	)
 	if err != nil {
@@ -173,17 +173,17 @@ func Example_custom_ttl() {
 func Example_cache_not_found() {
 	memory, _ := storage.NewOtter(1000)
 	c, _ := cache.NewCache(cache.WithConfigMemory(memory))
-	userCache := cache.Typed[User](c)
+	userCache := cache.Typed[int64, User](c)
 
 	ctx := context.Background()
 
 	// 定义返回空值的 loader
-	loader := func(ctx context.Context, key string) (User, error) {
+	loader := func(ctx context.Context, id int64) (User, error) {
 		return User{}, cache.ErrNotFound
 	}
 
 	// 第一次获取，会缓存空值
-	_, err := userCache.Get(ctx, "user:999", loader,
+	_, err := userCache.Get(ctx, "user", 999, loader,
 		cache.WithCacheNotFound(true, time.Minute), // 缓存空值1分钟
 	)
 	if err != nil && !cache.IsNotFound(err) {
@@ -192,7 +192,7 @@ func Example_cache_not_found() {
 	}
 
 	// 第二次获取，直接从缓存返回空值，不会调用 loader
-	_, err = userCache.Get(ctx, "user:999", loader)
+	_, err = userCache.Get(ctx, "user", 999, loader)
 	if err != nil && !cache.IsNotFound(err) {
 		log.Printf("Unexpected error: %v", err)
 		return
@@ -206,25 +206,25 @@ func Example_cache_not_found() {
 func Example_delete_operation() {
 	memory, _ := storage.NewOtter(1000)
 	c, _ := cache.NewCache(cache.WithConfigMemory(memory))
-	userCache := cache.Typed[User](c)
+	userCache := cache.Typed[int64, User](c)
 
 	ctx := context.Background()
 	user := User{ID: 1, Name: "Alice"}
 
 	// 设置缓存
-	if err := userCache.Set(ctx, "user:1", user); err != nil {
+	if err := userCache.Set(ctx, "user", user.ID, user); err != nil {
 		log.Printf("Failed to set cache: %v", err)
 		return
 	}
 
 	// 删除缓存
-	if err := userCache.Delete(ctx, "user:1"); err != nil {
+	if err := userCache.Delete(ctx, "user", user.ID); err != nil {
 		log.Printf("Failed to delete cache: %v", err)
 		return
 	}
 
 	// 验证删除成功
-	_, err := userCache.Get(ctx, "user:1", nil)
+	_, err := userCache.Get(ctx, "user", user.ID, nil)
 	if err == nil {
 		log.Println("Cache should have been deleted")
 		return
