@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -84,8 +85,9 @@ func TestTyped(t *testing.T) {
 
 	t.Run("创建TypedCache - 结构体类型", func(t *testing.T) {
 		cache := createTestCache(t)
-		typedCache := Typed[TestProduct](cache)
-
+		typedCache := Typed[int, TestProduct](cache, func(id int) string {
+			return fmt.Sprintf("%d", id)
+		})
 		assert.NotNil(t, typedCache)
 		assert.NotNil(t, typedCache.cache)
 	})
