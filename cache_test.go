@@ -21,7 +21,7 @@ import (
 func createMemoryAdapter(t *testing.T) storage.Memory {
 	t.Helper()
 
-	otter, err := storage.NewOtter(1024)
+	otter, err := storage.NewRistretto(1024)
 	if err != nil {
 		panic(err)
 	}
