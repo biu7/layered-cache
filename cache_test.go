@@ -4069,3 +4069,94 @@ func validateMGetResult(t *testing.T, target any, expected any) {
 		}
 	}
 }
+
+// 在文件末尾添加一个新的测试函数
+func TestLayeredCache_Get_WithLoader_EmptySlice(t *testing.T) {
+	cache, err := NewCache(
+		WithConfigMemory(createMemoryAdapter(t)),
+		WithConfigRemote(createRemoteAdapter(t)),
+	)
+	if err != nil {
+		t.Fatalf("NewCache() error = %v", err)
+	}
+
+	ctx := context.Background()
+
+	// 先验证Go语言中interface{}和nil的行为
+	t.Run("验证Go语言interface{}行为", func(t *testing.T) {
+		var nilSlice []string
+		var nilMap map[string]int
+		var nilInterface interface{}
+
+		t.Logf("nilSlice == nil: %v", nilSlice == nil)                           // true
+		t.Logf("nilMap == nil: %v", nilMap == nil)                               // true
+		t.Logf("interface{}(nilSlice) == nil: %v", interface{}(nilSlice) == nil) // false!
+		t.Logf("interface{}(nilMap) == nil: %v", interface{}(nilMap) == nil)     // false!
+		t.Logf("nilInterface == nil: %v", nilInterface == nil)                   // true
+	})
+
+	tests := []struct {
+		name        string
+		loader      LoaderFunc
+		expectError bool
+		description string
+	}{
+		{
+			name: "loader返回真正的nil - 会被视为notfound",
+			loader: func(ctx context.Context, key string) (any, error) {
+				return nil, nil // 真正的 nil
+			},
+			expectError: true, // 这个确实会返回 ErrNotFound
+			description: "loader返回nil应该被视为notfound",
+		},
+		{
+			name: "loader返回nil slice - 实际上不会被视为notfound",
+			loader: func(ctx context.Context, key string) (any, error) {
+				var tags []string // nil slice，但作为interface{}不等于nil
+				return tags, nil
+			},
+			expectError: false, // 这个实际上会成功
+			description: "nil slice作为interface{}不等于nil，所以会被正常缓存",
+		},
+		{
+			name: "loader返回empty slice - 正常工作",
+			loader: func(ctx context.Context, key string) (any, error) {
+				tags := []string{} // empty slice
+				return tags, nil
+			},
+			expectError: false,
+			description: "空切片应该被正常缓存",
+		},
+		{
+			name: "loader返回nil map - 实际上不会被视为notfound",
+			loader: func(ctx context.Context, key string) (any, error) {
+				var userPrefs map[string]interface{} // nil map，但作为interface{}不等于nil
+				return userPrefs, nil
+			},
+			expectError: false, // 这个实际上会成功
+			description: "nil map作为interface{}不等于nil，所以会被正常缓存",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			key := "test-" + tt.name
+			var result interface{}
+
+			err := cache.Get(ctx, key, &result, WithLoader(tt.loader))
+
+			if tt.expectError {
+				if !errors.Is(err, errors.ErrNotFound) {
+					t.Errorf("Expected ErrNotFound but got: %v", err)
+				}
+				t.Logf("CORRECT: %s", tt.description)
+			} else {
+				if err != nil {
+					t.Errorf("Expected success but got error: %v", err)
+				} else {
+					t.Logf("CORRECT: %s", tt.description)
+				}
+			}
+		})
+	}
+}
