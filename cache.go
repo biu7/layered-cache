@@ -169,7 +169,7 @@ func (c *LayeredCache) Get(ctx context.Context, key string, target any, opts ...
 			}
 			// 写回内存缓存
 			if c.memory != nil {
-				memoryTTL, _ := c.calculateLoaderTTL(config, false)
+				memoryTTL, _ := c.calculateLoaderTTL(config)
 				c.memory.Set(key, data, memoryTTL)
 			}
 
@@ -205,12 +205,10 @@ func (c *LayeredCache) loadAndCache(ctx context.Context, key string, config *get
 	// 检查是否为缺失值（nil 或 error）
 	isNotFound := IsNotFound(err) || value == nil
 	if isNotFound {
-		value = notFoundPlaceholder
-	}
-
-	// 判断是否应该缓存缺失值
-	cacheNotFound := c.shouldCacheNotFound(config.cacheNotFound)
-	if isNotFound && !cacheNotFound {
+		err = c.cacheNotFound(ctx, []string{key}, config)
+		if err != nil {
+			return nil, err
+		}
 		return nil, errors.ErrNotFound
 	}
 
@@ -221,7 +219,7 @@ func (c *LayeredCache) loadAndCache(ctx context.Context, key string, config *get
 	}
 
 	// 计算TTL
-	memoryTTL, remoteTTL := c.calculateLoaderTTL(config, isNotFound && cacheNotFound)
+	memoryTTL, remoteTTL := c.calculateLoaderTTL(config)
 
 	if c.memory != nil {
 		c.memory.Set(key, data, memoryTTL)
@@ -234,11 +232,36 @@ func (c *LayeredCache) loadAndCache(ctx context.Context, key string, config *get
 		}
 	}
 
-	if isNotFound {
-		return nil, errors.ErrNotFound
+	return data, nil
+}
+
+func (c *LayeredCache) cacheNotFound(ctx context.Context, keys []string, config *getOptions) error {
+	// 判断是否应该缓存缺失值
+	cacheNotFound := c.shouldCacheNotFound(config.cacheNotFound)
+	if !cacheNotFound {
+		return nil
+	}
+	// 计算 TTL
+	cacheNotFoundTTL := c.defaultCacheNotFoundTTL
+	if config.cacheNotFoundTTL != nil {
+		cacheNotFoundTTL = *config.cacheNotFoundTTL
 	}
 
-	return data, nil
+	var cacheData = make(map[string][]byte)
+	for _, key := range keys {
+		cacheData[key] = notFoundPlaceholder
+	}
+
+	if c.memory != nil {
+		c.memory.MSet(cacheData, cacheNotFoundTTL)
+	}
+
+	if c.remote != nil {
+		if err := c.remote.MSet(ctx, cacheData, cacheNotFoundTTL); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // MGet 批量获取缓存值
@@ -308,7 +331,7 @@ func (c *LayeredCache) MGet(ctx context.Context, keys []string, target any, opts
 
 		// 批量写回内存缓存
 		if c.memory != nil && len(writeBackData) > 0 {
-			memoryTTL, _ := c.calculateLoaderTTL(config, false)
+			memoryTTL, _ := c.calculateLoaderTTL(config)
 			c.memory.MSet(writeBackData, memoryTTL)
 		}
 
@@ -433,8 +456,8 @@ func (c *LayeredCache) batchLoadAndCache(ctx context.Context, keys []string, con
 		return nil, err
 	}
 
-	result := make(map[string][]byte)      // 正常值
-	missingData := make(map[string][]byte) // 缺失值
+	result := make(map[string][]byte) // 正常值
+	var missingKeys []string          // 缺失值
 
 	cacheNotFound := c.shouldCacheNotFound(config.cacheNotFound)
 
@@ -451,7 +474,7 @@ func (c *LayeredCache) batchLoadAndCache(ctx context.Context, keys []string, con
 		}
 
 		if isNotFound {
-			missingData[key] = notFoundPlaceholder
+			missingKeys = append(missingKeys, key)
 			continue
 		}
 
@@ -467,7 +490,7 @@ func (c *LayeredCache) batchLoadAndCache(ctx context.Context, keys []string, con
 	// 写入正常值缓存
 	if len(result) > 0 {
 		// 计算正常值的TTL
-		memoryTTL, remoteTTL := c.calculateLoaderTTL(config, false)
+		memoryTTL, remoteTTL := c.calculateLoaderTTL(config)
 
 		// 设置到内存缓存
 		if c.memory != nil {
@@ -483,36 +506,15 @@ func (c *LayeredCache) batchLoadAndCache(ctx context.Context, keys []string, con
 	}
 
 	// 写入缺失值缓存
-	if len(missingData) > 0 {
-		// 计算缺失值的TTL
-		memoryTTL, remoteTTL := c.calculateLoaderTTL(config, true)
-
-		// 设置到内存缓存
-		if c.memory != nil {
-			c.memory.MSet(missingData, memoryTTL)
-		}
-
-		// 设置到Redis缓存
-		if c.remote != nil {
-			if err = c.remote.MSet(ctx, missingData, remoteTTL); err != nil {
-				return nil, err
-			}
-		}
+	if len(missingKeys) > 0 {
+		_ = c.cacheNotFound(ctx, missingKeys, config)
 	}
 
 	return result, nil
 }
 
 // calculateLoaderTTL 计算内存和Redis缓存的TTL
-func (c *LayeredCache) calculateLoaderTTL(config *getOptions, isNotFound bool) (memoryTTL, remoteTTL time.Duration) {
-	if isNotFound {
-		cacheNotFoundTTL := c.defaultCacheNotFoundTTL
-		if config.cacheNotFoundTTL != nil {
-			cacheNotFoundTTL = *config.cacheNotFoundTTL
-		}
-		return cacheNotFoundTTL, cacheNotFoundTTL
-	}
-
+func (c *LayeredCache) calculateLoaderTTL(config *getOptions) (memoryTTL, remoteTTL time.Duration) {
 	memoryTTL = c.defaultMemoryTTL
 	if config.memoryTTL != nil {
 		memoryTTL = *config.memoryTTL
