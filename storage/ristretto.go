@@ -34,13 +34,10 @@ func NewRistretto(maxMemory int) (*Ristretto, error) {
 	}, nil
 }
 
-func NewRistrettoWithClient(client *ristretto.Cache) (*Ristretto, error) {
-	if client == nil {
-		return nil, fmt.Errorf("ristretto create: cache is nil")
-	}
+func NewRistrettoWithClient(client *ristretto.Cache) *Ristretto {
 	return &Ristretto{
 		client: client,
-	}, nil
+	}
 }
 
 func (r *Ristretto) Set(key string, value []byte, expire time.Duration) int32 {
