@@ -31,13 +31,10 @@ func NewOtter(maxMemory int) (*Otter, error) {
 	}, nil
 }
 
-func NewOtterWithClient(client *otter.CacheWithVariableTTL[string, []byte]) (*Otter, error) {
-	if client == nil {
-		return nil, fmt.Errorf("otter create: cache is nil")
-	}
+func NewOtterWithClient(client *otter.CacheWithVariableTTL[string, []byte]) *Otter {
 	return &Otter{
 		client: client,
-	}, nil
+	}
 }
 
 func (o *Otter) Set(key string, value []byte, expire time.Duration) int32 {
